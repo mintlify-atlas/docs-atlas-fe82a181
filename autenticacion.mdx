@@ -1,7 +1,7 @@
 ---
-title: "Authenticate with Tiendas Mi Cholo JWT API"
+title: "Autenticación JWT con Bearer Token — Tiendas Mi Cholo"
 sidebarTitle: "Autenticación"
-description: "Obtén tokens JWT con POST /api/auth/login y pásalos como Bearer token en el header Authorization en cada petición protegida."
+description: "Aprende a obtener tokens JWT con POST /api/auth/login, usarlos como Bearer token y gestionar el refresco de sesión en la API de Tiendas Mi Cholo."
 ---
 
 Tiendas Mi Cholo utiliza **JSON Web Tokens (JWT)** firmados con el algoritmo **HMAC-SHA256** para autenticar todas las peticiones a la API. El sistema es completamente **stateless**: el servidor no almacena sesiones; en cambio, cada petición debe incluir un token válido en el header `Authorization`. Al hacer login recibirás dos tokens: un **access token** de corta duración para las peticiones del día a día, y un **refresh token** de larga duración para renovarlo sin necesidad de volver a ingresar credenciales.
@@ -136,7 +136,7 @@ El access token incluye los siguientes **claims JWT**:
 
 Incluye el access token en el header HTTP `Authorization` con el esquema `Bearer`:
 
-```
+```http
 Authorization: Bearer <access_token>
 ```
 

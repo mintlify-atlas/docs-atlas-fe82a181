@@ -1,33 +1,33 @@
 ---
-title: "Dashboard: Estadísticas y KPIs en Tiempo Real"
+title: "Dashboard: KPIs y Estadísticas en Tiempo Real | Mi Cholo"
 sidebarTitle: "Dashboard"
-description: "El dashboard de Tiendas Mi Cholo muestra ventas del día, totales del mes, stock bajo y compras pendientes actualizados en tiempo real."
+description: "El dashboard de Tiendas Mi Cholo centraliza en tiempo real ventas del día, stock bajo, compras pendientes y gráficas mensuales de facturación."
 ---
 
 El **Dashboard** es la pantalla central de Tiendas Mi Cholo. Al iniciar sesión, cualquier usuario autenticado accede a un resumen ejecutivo del negocio: cuánto se vendió hoy, cuántos productos tienen stock bajo, cuántas compras siguen pendientes de recepción y una gráfica de ventas mensuales para el año en curso. Todos los datos provienen de una sola llamada al backend y se recargan automáticamente al montar el componente.
 
 ## KPIs del Dashboard
 
-El backend consolida ocho indicadores en un único endpoint y los devuelve como un objeto JSON plano. La interfaz Angular renderiza cada valor en una tarjeta con ícono y etiqueta.
+El backend consolida los indicadores en un único endpoint y los devuelve como un objeto JSON. La interfaz Angular renderiza cada valor en una tarjeta con ícono y etiqueta.
 
 <CardGroup cols={3}>
   <Card title="ventasHoy" icon="circle-dollar-sign">
-    Monto total (S/) facturado en el día calendario actual. Suma sólo ventas con estado `COMPLETADA`.
+    Monto total (S/) facturado en el día calendario actual. Suma únicamente ventas con estado `COMPLETADA`.
   </Card>
   <Card title="totalVentas" icon="chart-bar">
-    Cantidad acumulada de ventas registradas en el sistema desde el inicio de operaciones.
+    Cantidad total de registros en la tabla `ventas` desde el inicio de operaciones.
   </Card>
   <Card title="totalProductos" icon="box">
-    Número de productos activos en el catálogo (`activo = true`).
+    Conteo total de registros en la tabla `productos` (incluye productos activos e inactivos).
   </Card>
   <Card title="totalClientes" icon="users">
-    Cantidad de clientes activos registrados.
+    Conteo total de registros en la tabla `clientes`.
   </Card>
   <Card title="comprasPendientes" icon="clock">
     Órdenes de compra con estado `PENDIENTE` que aún no han sido recibidas en almacén.
   </Card>
-  <Card title="productosStockBajo" icon="triangle-alert">
-    Lista de productos donde `stockActual < stockMinimo`. El campo `alertasStock` expone el conteo numérico de esa lista.
+  <Card title="alertasStock" icon="triangle-alert">
+    Conteo numérico de productos donde `stockActual <= stockMinimo`. El campo `productosStockBajo` contiene la lista detallada.
   </Card>
 </CardGroup>
 

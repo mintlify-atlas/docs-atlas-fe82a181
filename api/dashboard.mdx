@@ -1,10 +1,10 @@
 ---
-title: "Dashboard Stats API — Real-Time Business KPIs"
+title: "Dashboard API — KPIs y Estadísticas en Tiempo Real"
 sidebarTitle: "Dashboard"
-description: "GET /api/dashboard/stats retorna 8 KPIs en tiempo real: ventas del día, totales del mes, productos con stock bajo y compras pendientes."
+description: "GET /api/dashboard/stats retorna 9 KPIs en tiempo real: ventas del día, totales del mes, productos con stock bajo y compras pendientes."
 ---
 
-The Dashboard module exposes a single aggregation endpoint that gives every authenticated user an instant snapshot of store health. The response is computed in real time from live database queries — sales totals, product counts, low-stock alerts, active client count, monthly sales trends, product distribution by category, and pending purchase orders are all returned in one call. No date range parameters are required; the service uses `LocalDateTime.now()` to scope "today" and "this year" queries automatically.
+The Dashboard module exposes a single aggregation endpoint that gives every authenticated user an instant snapshot of store health. The response is computed in real time from live database queries — sales totals, product counts, low-stock alerts, active client count, monthly sales trends, product distribution by category, and pending purchase orders are all returned in one call as nine top-level keys. No date range parameters are required; the service uses `LocalDateTime.now()` to scope "today" and "this year" queries automatically.
 
 ---
 

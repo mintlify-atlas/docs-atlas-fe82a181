@@ -1,5 +1,5 @@
 ---
-title: "Sales API — Register, Query, and Void Transactions"
+title: "Ventas API — Registrar, Consultar y Anular Transacciones"
 sidebarTitle: "Ventas"
 description: "Gestiona ventas en /api/ventas: lista, registra (ADMIN/VENDEDOR), y anula (ADMIN). El stock se descuenta automáticamente al registrar."
 ---
@@ -27,7 +27,7 @@ List all sales recorded in the system, sorted by the default JPA fetch order. Ac
 </ResponseField>
 
 <ResponseField name="numeroVenta" type="string">
-  Auto-generated sale number in the format `VNT-00001`.
+  Auto-generated sale number in the format `V-{year}-{sequence}` (e.g. `V-2024-0001`).
 </ResponseField>
 
 <ResponseField name="tipoComprobante" type="string">
@@ -35,7 +35,7 @@ List all sales recorded in the system, sorted by the default JPA fetch order. Ac
 </ResponseField>
 
 <ResponseField name="estado" type="string">
-  Current sale status: `COMPLETADA` or `ANULADA`.
+  Current sale status: `PENDIENTE`, `COMPLETADA`, or `ANULADA`.
 </ResponseField>
 
 <ResponseField name="subtotal" type="BigDecimal">
@@ -70,7 +70,7 @@ List all sales recorded in the system, sorted by the default JPA fetch order. Ac
 [
   {
     "id": 1,
-    "numeroVenta": "VNT-00001",
+    "numeroVenta": "V-2024-0001",
     "tipoComprobante": "BOLETA",
     "estado": "COMPLETADA",
     "subtotal": 2711.86,
@@ -208,7 +208,7 @@ Returns the persisted `Venta` object including the auto-generated `numeroVenta` 
 {
   "timestamp": "2024-01-15T14:31:00",
   "status": 400,
-  "error": "Stock insuficiente para el producto: Laptop HP 15"
+  "error": "Stock insuficiente para: Laptop HP 15. Disponible: 0"
 }
 ```
 
@@ -240,7 +240,7 @@ curl -X POST http://localhost:8080/api/ventas \
 ```json Response — 200 OK
 {
   "id": 7,
-  "numeroVenta": "VNT-00007",
+  "numeroVenta": "V-2024-0007",
   "tipoComprobante": "BOLETA",
   "estado": "COMPLETADA",
   "subtotal": 3413.75,
@@ -308,7 +308,7 @@ curl -X PATCH http://localhost:8080/api/ventas/7/anular \
 ```json Response — 200 OK
 {
   "id": 7,
-  "numeroVenta": "VNT-00007",
+  "numeroVenta": "V-2024-0007",
   "tipoComprobante": "BOLETA",
   "estado": "ANULADA",
   "subtotal": 3413.75,

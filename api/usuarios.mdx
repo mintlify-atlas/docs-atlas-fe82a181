@@ -1,5 +1,5 @@
 ---
-title: "Users API — Manage System Users and Roles"
+title: "Tiendas Mi Cholo — Users API (CRUD, BCrypt, ADMIN)"
 sidebarTitle: "Usuarios"
 description: "CRUD de usuarios del sistema. GET, POST, PUT y DELETE en /api/usuarios. Requiere rol ADMIN. Las contraseñas se almacenan con BCrypt."
 ---
@@ -282,7 +282,7 @@ curl -s -X DELETE http://localhost:8080/api/usuarios/4 \
 **Respuesta:** `204 No Content` (sin cuerpo).
 
 <Warning>
-  El borrado lógico **no impide** que el usuario intente autenticarse si conoce sus credenciales. Para bloquear el acceso completamente, también actualiza `activo: false` con un PUT antes de hacer el DELETE, o cambia su contraseña.
+  El borrado lógico **no impide** que el usuario intente autenticarse si conoce sus credenciales. Para bloquear el acceso por completo, cambia la contraseña del usuario mediante `PUT /api/usuarios/{id}` con un nuevo valor en `password` antes (o después) de eliminarlo.
 </Warning>
 
 ---

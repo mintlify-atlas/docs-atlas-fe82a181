@@ -1,7 +1,7 @@
 ---
-title: "Requisitos del Sistema para Tiendas Mi Cholo"
+title: "Software y Puertos Requeridos — Tiendas Mi Cholo"
 sidebarTitle: "Requisitos"
-description: "Requisitos de software y hardware para instalar Tiendas Mi Cholo: Java 21, Node.js 20+, Docker Desktop, MySQL 8 y puertos disponibles."
+description: "Requisitos mínimos de software y hardware para Tiendas Mi Cholo: Java 21, Node.js 20+, Docker Desktop, MySQL 8 y puertos 8080, 4200, 3306, 8081."
 ---
 
 Antes de instalar y ejecutar **Tiendas Mi Cholo**, asegúrate de tener el software correcto en tu máquina. El sistema está compuesto por tres capas: un backend Spring Boot 3.3.4 que requiere Java 21, un frontend Angular 22 que requiere Node.js 20+, y una base de datos MySQL 8 que puede levantarse vía Docker Compose o instalarse localmente. Cumplir con estos requisitos garantiza que la compilación, el arranque y la comunicación entre servicios funcionen sin contratiempos.
@@ -34,4 +34,20 @@ Los siguientes puertos deben estar **libres** en tu máquina antes de iniciar lo
 
 <Note>
   **Docker Compose es opcional.** Si ya tienes MySQL 8 instalado localmente, puedes crear la base de datos `tienda_db` manualmente usando el script `database/schema.sql` e ignorar el `docker-compose.yml`. Solo asegúrate de que el usuario `tienda_user` con contraseña `tienda123` tenga permisos sobre dicha base de datos, o ajusta las credenciales en `application.properties`.
+</Note>
+
+## Imagen de producción del backend
+
+El repositorio incluye un `backend/Dockerfile` multi-etapa para construir y ejecutar el backend como un contenedor Docker independiente. Está pensado para entornos de producción o CI/CD donde no se compila en la máquina local.
+
+<Note>
+  El `backend/Dockerfile` utiliza **Gradle** (`./gradlew clean build`) en la etapa de compilación, aunque el proyecto también expone un `pom.xml` para flujos Maven. En desarrollo local se recomienda compilar con `./mvnw package -DskipTests` (Maven Wrapper incluido en el repositorio). Para producción, puedes construir la imagen directamente con:
+
+  ```bash
+  cd backend
+  docker build -t tienda-backend:latest .
+  docker run -p 8080:8080 tienda-backend:latest
+  ```
+
+  La imagen base de ejecución es `eclipse-temurin:21-jre-jammy` y expone el puerto `8080`.
 </Note>

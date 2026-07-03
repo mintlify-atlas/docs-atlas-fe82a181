@@ -1,7 +1,7 @@
 ---
-title: "Tiendas Mi Cholo: Gestión Comercial Full-Stack"
+title: "Tiendas Mi Cholo: Plataforma SaaS de Gestión Comercial"
 sidebarTitle: "Introducción"
-description: "Tiendas Mi Cholo es un sistema de gestión comercial para tiendas. Conoce su arquitectura, roles, módulos y tecnologías."
+description: "Tiendas Mi Cholo es un SaaS full-stack con Angular 22, Spring Boot 3.3.4 y MySQL 8. Conoce módulos, roles, arquitectura y tecnologías del sistema."
 ---
 
 **Tiendas Mi Cholo** es un sistema de gestión comercial diseñado para pequeñas y medianas tiendas que necesitan controlar sus ventas, compras, inventario, clientes y proveedores desde una sola plataforma. Está dirigido a administradores, vendedores y almaceneros que buscan digitalizar y centralizar las operaciones diarias de su negocio con una interfaz web moderna y una API robusta.
@@ -22,34 +22,34 @@ El backend expone todos sus endpoints bajo el prefijo `/api` y autentica cada pe
 ## Módulos disponibles
 
 <CardGroup cols={2}>
-  <Card title="Dashboard" icon="chart-line" href="/modulos/dashboard">
+  <Card title="Dashboard" icon="chart-line" href="modulos/dashboard">
     Estadísticas en tiempo real: ventas del día, monto acumulado, productos con stock bajo y compras pendientes.
   </Card>
-  <Card title="Productos" icon="box" href="/modulos/productos">
+  <Card title="Productos" icon="box" href="modulos/productos">
     Catálogo completo de productos con código, precios de compra/venta, stock actual y mínimo, e imagen.
   </Card>
-  <Card title="Ventas" icon="receipt" href="/modulos/ventas">
+  <Card title="Ventas" icon="receipt" href="modulos/ventas">
     Registro de boletas, facturas y tickets. Descuento automático de stock e historial de movimientos.
   </Card>
-  <Card title="Compras" icon="truck" href="/modulos/compras">
+  <Card title="Compras" icon="truck" href="modulos/compras">
     Órdenes de compra a proveedores con flujo de estados: PENDIENTE → RECIBIDA. Incremento automático de stock al recibir.
   </Card>
-  <Card title="Inventario" icon="warehouse" href="/modulos/inventario">
+  <Card title="Inventario" icon="warehouse" href="modulos/inventario">
     Historial completo de movimientos de stock (entradas, salidas, ajustes) con trazabilidad por producto y usuario.
   </Card>
-  <Card title="Usuarios" icon="users" href="/admin/usuarios">
+  <Card title="Usuarios" icon="users" href="admin/usuarios">
     Gestión de cuentas del sistema con asignación de roles y borrado lógico. Exclusivo para ADMIN.
   </Card>
-  <Card title="Clientes" icon="user" href="/admin/clientes">
+  <Card title="Clientes" icon="user" href="admin/clientes">
     Registro de clientes con tipo de documento (DNI, RUC, Pasaporte, CE) y búsqueda por nombre o documento.
   </Card>
-  <Card title="Proveedores" icon="building" href="/admin/proveedores">
+  <Card title="Proveedores" icon="building" href="admin/proveedores">
     Directorio de proveedores con RUC, persona de contacto y búsqueda por razón social.
   </Card>
-  <Card title="Categorías" icon="tag" href="/admin/categorias">
+  <Card title="Categorías" icon="tag" href="admin/categorias">
     Organización de productos por categoría. Creación y edición restringidas al rol ADMIN.
   </Card>
-  <Card title="Reportes" icon="file-pdf" href="/admin/reportes">
+  <Card title="Reportes" icon="file-pdf" href="admin/reportes">
     Generación y descarga de reportes en PDF: reporte de ventas y reporte de inventario. Solo ADMIN.
   </Card>
 </CardGroup>

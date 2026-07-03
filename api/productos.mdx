@@ -1,7 +1,7 @@
 ---
-title: "Products API — Catalog, Stock, and Bulk Import"
+title: "Tiendas Mi Cholo — Products API (Catalog & Import)"
 sidebarTitle: "Productos"
-description: "CRUD de productos en /api/productos con búsqueda por texto, alertas de stock bajo e importación masiva con upsert por código."
+description: "CRUD de productos en /api/productos con búsqueda por texto, alerta de stock bajo e importación masiva (upsert por código). Roles ADMIN y ALMACENERO."
 ---
 
 El módulo de productos es el núcleo del catálogo de **Tiendas Mi Cholo**. Todos los roles autenticados pueden consultar, buscar y ver productos. La creación y edición requieren rol `ADMIN` o `ALMACENERO`. Solo `ADMIN` puede eliminar. El stock (`stockActual`) **no se modifica directamente** en los endpoints PUT — se gestiona automáticamente a través de ventas y compras. La importación masiva (`/importar`) realiza un **upsert** por código: actualiza el producto si ya existe, lo crea si no.
@@ -256,8 +256,8 @@ Crea un nuevo producto en el catálogo. **Requiere rol `ADMIN` o `ALMACENERO`.**
   Código de moneda ISO 4217. Por defecto `PEN`. Máx. 10 chars.
 </ParamField>
 
-<ParamField body="categoriaId" type="integer">
-  ID de la categoría. Si es `null` y tampoco se envía `categoriaNombre`, el sistema lanzará un error o usará la categoría por defecto en `/importar`.
+<ParamField body="categoriaId" type="integer" required>
+  ID de la categoría. Requerido en `POST` y `PUT` directos — el servidor lanza `404` si el ID no existe. En el endpoint `/importar` puede omitirse en favor de `categoriaNombre`.
 </ParamField>
 
 <ParamField body="categoriaNombre" type="string">
@@ -338,7 +338,11 @@ Actualiza los datos de un producto. **Requiere rol `ADMIN` o `ALMACENERO`.**
 
 ### Request body
 
-Mismos campos que `POST /api/productos`. El campo `stockActual` es ignorado por el servidor en este endpoint.
+Mismos campos que `POST /api/productos`, con las siguientes excepciones:
+
+- `stockActual` — **ignorado**. El stock se gestiona exclusivamente por ventas y compras.
+- `codigo` — **ignorado**. El código del producto no puede modificarse vía PUT.
+- `almacenId` — **ignorado**. La asignación de almacén no se actualiza en este endpoint.
 
 ### Ejemplo
 

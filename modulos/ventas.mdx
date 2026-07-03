@@ -1,5 +1,5 @@
 ---
-title: "Registrar y Gestionar Ventas en Tiendas Mi Cholo"
+title: "Registrar y Gestionar Ventas en Tiendas Mi Cholo POS"
 sidebarTitle: "Ventas"
 description: "Registra ventas con múltiples productos, tipos de comprobante (BOLETA, FACTURA, TICKET), descuentos por ítem e IGV calculado automáticamente."
 ---
@@ -28,7 +28,7 @@ El módulo de **Ventas** es el punto de transacción principal de Tiendas Mi Cho
     Al hacer clic en **Confirmar Venta** (o presionar `F9`), el frontend envía la petición `POST /api/ventas`. El backend valida el stock de cada producto, calcula el total con IGV, genera el número de venta, descuenta el stock y crea los movimientos de inventario en una sola transacción.
   </Step>
   <Step title="Stock descontado e inventario actualizado">
-    Por cada línea de detalle, `stockActual` del producto se reduce en la cantidad vendida y se registra un `Inventario` con `tipo = SALIDA`, `motivo = "Venta VNT-YYYY-NNNN"` y referencia a la venta.
+    Por cada línea de detalle, `stockActual` del producto se reduce en la cantidad vendida y se registra un `Inventario` con `tipo = SALIDA`, `motivo = "Venta V-YYYY-NNNN"` y referencia a la venta.
   </Step>
 </Steps>
 
@@ -52,7 +52,7 @@ El módulo de **Ventas** es el punto de transacción principal de Tiendas Mi Cho
 
 El backend calcula los montos exclusivamente en el servidor — el frontend solo presenta los valores calculados:
 
-```
+```text
 subtotal_item = precioUnitario × cantidad × (1 − descuento / 100)
 subtotal      = Σ subtotal_item
 IGV           = subtotal × 0.18   (18%, redondeado a 2 decimales)
@@ -112,7 +112,7 @@ Authorization: Bearer <token>   # Solo ADMIN
 Al anular una venta:
 1. El estado cambia a `ANULADA`.
 2. Por cada ítem del detalle, `stockActual` del producto se **incrementa** en la cantidad vendida.
-3. Se crea un movimiento de inventario con `tipo = ENTRADA` y `motivo = "Anulación venta VNT-YYYY-NNNN"`.
+3. Se crea un movimiento de inventario con `tipo = ENTRADA` y `motivo = "Anulación venta V-YYYY-NNNN"`.
 
 **Respuesta `200 OK`:** objeto `Venta` con `estado = "ANULADA"`.
 

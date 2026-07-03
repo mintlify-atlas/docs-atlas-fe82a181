@@ -1,7 +1,7 @@
 ---
-title: "Gestión de Usuarios y Control de Acceso"
+title: "Gestión de Usuarios del Sistema y Control de Acceso"
 sidebarTitle: "Usuarios"
-description: "Administra los usuarios del sistema, asigna roles (ADMIN, VENDEDOR, ALMACENERO) y controla el acceso a cada módulo. Solo accesible para ADMIN."
+description: "Administra los usuarios del sistema, asigna roles (ADMIN, VENDEDOR, ALMACENERO) y controla el acceso a cada módulo. Exclusivo para ADMIN."
 ---
 
 El módulo de Usuarios es el núcleo del control de acceso de **Tiendas Mi Cholo**. Desde aquí, el administrador puede crear nuevas cuentas, asignar roles que determinan a qué partes del sistema puede acceder cada persona, y desactivar cuentas sin perder el historial de operaciones. Todos los endpoints de este módulo requieren un JWT válido con el rol `ADMIN`.
@@ -153,7 +153,7 @@ El cuerpo tiene la misma estructura que el `POST`. Ten en cuenta las siguientes 
 
 - Si `password` se omite o se envía como cadena vacía (`""`), **la contraseña existente no se modifica**.
 - Si `activo` se incluye, permite activar o desactivar la cuenta directamente desde el `PUT`.
-- El campo `username` **no se puede cambiar** desde la actualización; se ignora en el procesamiento del `PUT`.
+- El campo `username` **no se puede cambiar**. El valor enviado pasa validación `@NotBlank` (es obligatorio incluirlo en el body), pero el servidor lo descarta y **no actualiza** el `username` almacenado.
 
 ---
 

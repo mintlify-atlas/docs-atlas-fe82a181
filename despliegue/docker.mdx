@@ -1,7 +1,7 @@
 ---
-title: "Deploy Tiendas Mi Cholo with Docker Compose"
+title: "Docker Compose para Base de Datos — Tiendas Mi Cholo"
 sidebarTitle: "Docker Compose"
-description: "Levanta MySQL 8 y phpMyAdmin con un solo comando usando el docker-compose.yml incluido. El schema y datos iniciales se cargan automáticamente."
+description: "Levanta MySQL 8 y phpMyAdmin con un solo comando usando el docker-compose.yml incluido en el repositorio. Schema y datos iniciales se cargan solos."
 ---
 
 El repositorio incluye un archivo `docker-compose.yml` listo para usar que levanta **MySQL 8** y **phpMyAdmin** con un solo comando. Al iniciar por primera vez, Docker inyecta automáticamente los scripts `database/schema.sql` y `database/data.sql`, creando todas las tablas y cargando los datos iniciales (roles, usuarios de prueba, categorías y productos) sin ninguna intervención manual. Esta es la forma recomendada de preparar la base de datos en entornos de desarrollo.
@@ -122,7 +122,7 @@ Al crear el contenedor por **primera vez**, MySQL ejecuta los scripts montados e
   <Step title="Accede a phpMyAdmin">
     Una vez que ambos contenedores estén en ejecución, abre tu navegador y visita:
 
-    ```
+    ```text
     http://localhost:8081
     ```
 
@@ -143,7 +143,7 @@ Al crear el contenedor por **primera vez**, MySQL ejecuta los scripts montados e
 
 El backend Spring Boot se conecta a MySQL usando la siguiente JDBC URL configurada en `application.properties`:
 
-```
+```text
 jdbc:mysql://localhost:3306/tienda_db?useSSL=false&serverTimezone=America/Lima&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
 ```
 
@@ -158,6 +158,42 @@ jdbc:mysql://localhost:3306/tienda_db?useSSL=false&serverTimezone=America/Lima&a
 
 <Note>
   El servidor MySQL arranca con `--character-set-server=utf8mb4` y `--collation-server=utf8mb4_unicode_ci`, lo que garantiza soporte completo para caracteres especiales, emojis y texto en español (tildes, ñ) tanto en el almacenamiento como en la conexión.
+</Note>
+
+## Imagen de producción del backend (`backend/Dockerfile`)
+
+El archivo `docker-compose.yml` levanta únicamente la base de datos y phpMyAdmin. El backend Spring Boot dispone de su propio `backend/Dockerfile` multi-etapa para construir una imagen de producción independiente:
+
+```dockerfile
+# Etapa de compilación
+FROM eclipse-temurin:21-jdk-jammy AS build
+WORKDIR /app
+COPY . .
+RUN chmod +x gradlew
+RUN ./gradlew clean build -x test
+
+# Etapa de ejecución
+FROM eclipse-temurin:21-jre-jammy
+WORKDIR /app
+COPY --from=build /app/build/libs/*-SNAPSHOT.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]
+```
+
+Para construir y ejecutar el contenedor del backend de forma independiente (por ejemplo, en un pipeline CI/CD o entorno de staging):
+
+```bash
+cd backend
+docker build -t tienda-backend:latest .
+docker run -p 8080:8080 \
+  -e SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/tienda_db \
+  -e SPRING_DATASOURCE_USERNAME=tienda_user \
+  -e SPRING_DATASOURCE_PASSWORD=tienda123 \
+  tienda-backend:latest
+```
+
+<Note>
+  Este `Dockerfile` usa **Gradle** internamente para compilar el JAR. La imagen de ejecución se basa en `eclipse-temurin:21-jre-jammy` y expone el puerto `8080`. El `docker-compose.yml` principal **no** incluye el servicio del backend — es exclusivamente para la base de datos y phpMyAdmin en desarrollo local.
 </Note>
 
 ## Gestión y limpieza

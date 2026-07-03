@@ -1,7 +1,7 @@
 ---
-title: "Gestión de Productos y Catálogo de Inventario"
+title: "Gestión de Productos y Catálogo — Tiendas Mi Cholo"
 sidebarTitle: "Productos"
-description: "Administra el catálogo de productos con precios de compra/venta, stock mínimo, categorías y alertas automáticas de stock bajo."
+description: "Administra el catálogo de productos con precios de compra y venta, stock mínimo, categorías y alertas automáticas de reposición de stock."
 ---
 
 El módulo de **Productos** es el corazón del catálogo de Tiendas Mi Cholo. Desde aquí se registran todos los artículos que la tienda compra y vende, incluyendo su precio de costo, precio de venta al público, unidad de medida, moneda, código de barras y el almacén donde se encuentran físicamente. El stock de cada producto se actualiza de forma automática cada vez que se registra una venta (descuenta unidades) o se recibe una compra (suma unidades), sin intervención manual.
@@ -59,7 +59,7 @@ Cuando `stockActual ≤ stockMinimo`, el producto es clasificado como "stock baj
     ```http
     GET /api/productos/buscar?q=laptop
     ```
-    Búsqueda full-text por `nombre`, `codigo` o `descripcion`.
+    Búsqueda por `nombre`, `codigo` o `codigoBarras` (solo productos con `activo = true`).
 
     ```http
     GET /api/productos/{id}

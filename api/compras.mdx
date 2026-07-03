@@ -1,5 +1,5 @@
 ---
-title: "Purchases API — Create Orders and Receive Stock"
+title: "Compras API — Crear Órdenes y Recepcionar Mercadería"
 sidebarTitle: "Compras"
 description: "Gestiona órdenes de compra en /api/compras: crea (ADMIN/ALMACENERO), recibe mercadería e incrementa stock automáticamente al confirmar recepción."
 ---
@@ -27,7 +27,7 @@ List all purchase orders recorded in the system. Returns all orders regardless o
 </ResponseField>
 
 <ResponseField name="numeroCompra" type="string">
-  Auto-generated purchase order number (e.g. `CMP-00001`).
+  Auto-generated purchase order number in the format `C-{year}-{sequence}` (e.g. `C-2024-0001`).
 </ResponseField>
 
 <ResponseField name="estado" type="string">
@@ -70,7 +70,7 @@ List all purchase orders recorded in the system. Returns all orders regardless o
 [
   {
     "id": 1,
-    "numeroCompra": "CMP-00001",
+    "numeroCompra": "C-2024-0001",
     "estado": "PENDIENTE",
     "subtotal": 2118.64,
     "igv": 381.36,
@@ -222,7 +222,7 @@ curl -X POST http://localhost:8080/api/compras \
 ```json Response — 200 OK
 {
   "id": 3,
-  "numeroCompra": "CMP-00003",
+  "numeroCompra": "C-2024-0003",
   "estado": "PENDIENTE",
   "subtotal": 13450.00,
   "igv": 2421.00,
@@ -309,7 +309,7 @@ curl -X PATCH http://localhost:8080/api/compras/3/recibir \
 ```json Response — 200 OK
 {
   "id": 3,
-  "numeroCompra": "CMP-00003",
+  "numeroCompra": "C-2024-0003",
   "estado": "RECIBIDA",
   "subtotal": 13450.00,
   "igv": 2421.00,
