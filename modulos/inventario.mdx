@@ -1,0 +1,170 @@
+---
+title: "Trazabilidad de Movimientos de Inventario"
+sidebarTitle: "Inventario"
+description: "El módulo de inventario registra cada entrada, salida y ajuste de stock con fecha, usuario responsable y referencia a la operación de origen."
+---
+
+El módulo de **Inventario** proporciona una pista de auditoría completa de cada cambio de stock en Tiendas Mi Cholo. Cada vez que se registra una venta, se recibe una compra o se anula cualquiera de ambas operaciones, el sistema crea automáticamente un registro de movimiento en la tabla `inventario`. Estos registros son inmutables: no se editan ni eliminan, solo se crean. Esto garantiza que siempre sea posible reconstruir el historial de existencias de cualquier producto desde el primer movimiento hasta el estado actual.
+
+## Tipos de Movimiento
+
+<CardGroup cols={3}>
+  <Card title="ENTRADA" icon="arrow-up">
+    Se genera cuando una compra pasa a estado `RECIBIDA`. También cuando se anula una venta (el stock regresa al almacén). El `stockNuevo` es mayor que el `stockAnterior`.
+  </Card>
+  <Card title="SALIDA" icon="arrow-down">
+    Se genera al registrar una venta exitosa. Por cada producto en el detalle de la venta se crea un movimiento de tipo SALIDA. El `stockNuevo` es menor que el `stockAnterior`.
+  </Card>
+  <Card title="AJUSTE" icon="sliders-horizontal">
+    Reservado para correcciones manuales de inventario. No se genera automáticamente en ningún flujo de ventas o compras.
+  </Card>
+</CardGroup>
+
+## Tipos de Referencia (`referenciaTipo`)
+
+Cada movimiento incluye el campo `referenciaTipo` que indica el origen de la operación y el `referenciaId` con el ID del documento de origen:
+
+| `referenciaTipo` | `referenciaId` apunta a | Cuándo se crea |
+|---|---|---|
+| `VENTA` | `ventas.id` | Al registrar o anular una venta |
+| `COMPRA` | `compras.id` | Al recibir una orden de compra |
+| `AJUSTE` | N/A | Ajuste manual (uso futuro) |
+
+## Campos de un Movimiento
+
+La entidad `Inventario` (tabla `inventario`) almacena los siguientes datos:
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | `Long` | Identificador del movimiento |
+| `tipo` | `Enum` | `ENTRADA`, `SALIDA` o `AJUSTE` |
+| `cantidad` | `Integer` | Unidades movidas (siempre positivo) |
+| `stockAnterior` | `Integer` | Stock del producto antes del movimiento |
+| `stockNuevo` | `Integer` | Stock del producto después del movimiento |
+| `motivo` | `String` (max 300) | Descripción del motivo (ej. `"Venta V-2024-0001"`, `"Recepción compra C-2024-0003"`) |
+| `referenciaId` | `Long` | ID del documento origen (venta o compra) |
+| `referenciaTipo` | `String` (max 20) | `VENTA`, `COMPRA` o `AJUSTE` |
+| `producto` | `Producto` | Producto al que pertenece el movimiento |
+| `usuario` | `Usuario` | Usuario que desencadenó la operación |
+| `fecha` | `LocalDateTime` | Fecha y hora exacta del movimiento (asignada por el servidor) |
+
+## Endpoints de la API
+
+### Listar todos los movimientos
+
+```http
+GET /api/inventario
+Authorization: Bearer <token>
+```
+
+Devuelve todos los movimientos registrados en el sistema, en el orden que los almacena la base de datos. El frontend Angular invierte el arreglo al recibirlo (`ms.reverse()`) para mostrar los más recientes primero.
+
+### Movimientos por producto
+
+```http
+GET /api/inventario/producto/{productoId}
+Authorization: Bearer <token>
+```
+
+Devuelve el historial completo de movimientos de un producto específico, ordenado por `fecha` descendente (más reciente primero) directamente desde la base de datos.
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `productoId` | `Long` | ID del producto a consultar |
+
+## Ejemplo de Respuesta
+
+El siguiente es el formato estándar de un movimiento devuelto por ambos endpoints:
+
+```json
+[
+  {
+    "id": 12,
+    "tipo": "SALIDA",
+    "cantidad": 1,
+    "stockAnterior": 11,
+    "stockNuevo": 10,
+    "motivo": "Venta V-2024-0005",
+    "referenciaId": 5,
+    "referenciaTipo": "VENTA",
+    "producto": {
+      "id": 1,
+      "codigo": "PROD-001",
+      "nombre": "Laptop HP 15"
+    },
+    "usuario": {
+      "id": 2,
+      "nombre": "Luis",
+      "apellido": "Mendoza",
+      "username": "lmendoza"
+    },
+    "fecha": "2024-01-15T14:30:00"
+  },
+  {
+    "id": 8,
+    "tipo": "ENTRADA",
+    "cantidad": 5,
+    "stockAnterior": 6,
+    "stockNuevo": 11,
+    "motivo": "Recepción compra C-2024-0002",
+    "referenciaId": 2,
+    "referenciaTipo": "COMPRA",
+    "producto": {
+      "id": 1,
+      "codigo": "PROD-001",
+      "nombre": "Laptop HP 15"
+    },
+    "usuario": {
+      "id": 1,
+      "nombre": "Juan",
+      "apellido": "Pérez",
+      "username": "admin"
+    },
+    "fecha": "2024-01-10T09:00:00"
+  }
+]
+```
+
+## Cómo leer un movimiento
+
+<Tabs>
+  <Tab title="SALIDA (Venta)">
+    El campo `cantidad` indica cuántas unidades salieron. Para verificar la operación: `stockAnterior - cantidad = stockNuevo`. El `referenciaId` apunta al `id` de la venta; puedes cruzar datos con `GET /api/ventas/{referenciaId}` para ver los detalles completos de la transacción.
+  </Tab>
+  <Tab title="ENTRADA (Compra recibida)">
+    El campo `cantidad` indica cuántas unidades ingresaron. Para verificar: `stockAnterior + cantidad = stockNuevo`. El `referenciaId` apunta al `id` de la compra; puedes cruzar con `GET /api/compras/{referenciaId}`.
+  </Tab>
+  <Tab title="ENTRADA (Anulación de venta)">
+    Cuando se anula una venta, el sistema genera movimientos de tipo `ENTRADA` (no `AJUSTE`) con `referenciaTipo = "VENTA"` y `motivo = "Anulación venta V-YYYY-NNNN"`. Esto permite identificar claramente que el stock fue repuesto por una anulación y no por una compra nueva.
+  </Tab>
+</Tabs>
+
+## Interfaz de Usuario
+
+La pantalla **Inventario** en el frontend muestra una tabla con los siguientes campos para cada movimiento:
+
+| Columna | Fuente en la API |
+|---|---|
+| Fecha | `fecha` (formateada `dd/MM/yyyy HH:mm`) |
+| Producto | `producto.nombre` |
+| Tipo | `tipo` con badge de color (verde=ENTRADA, rojo=SALIDA, amarillo=AJUSTE) |
+| Cantidad | `cantidad` prefijado con `+` o `−` según el tipo |
+| Stock Ant. | `stockAnterior` |
+| Stock Nuevo | `stockNuevo` (en rojo si ≤ 5) |
+| Motivo | `motivo` |
+| Referencia | `referenciaTipo` con badge |
+| Usuario | `usuario.nombre` |
+
+## Control de Acceso
+
+El módulo de inventario es de **solo lectura** para todos los roles. No existe un endpoint para crear movimientos manualmente a través de la API pública — los movimientos solo se generan de forma automática por el sistema al procesar ventas y compras.
+
+| Rol | Ver movimientos |
+|---|:---:|
+| ADMIN | ✅ |
+| VENDEDOR | ✅ |
+| ALMACENERO | ✅ |
+
+<Note>
+  Para auditar el stock de un producto específico, usa `GET /api/inventario/producto/{productoId}`. Los registros llegan ordenados por fecha descendente, por lo que el primer elemento siempre es el último movimiento registrado y su `stockNuevo` debe coincidir exactamente con el `stockActual` actual del producto.
+</Note>

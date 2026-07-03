@@ -1,0 +1,163 @@
+---
+title: "Órdenes de Compra y Recepción de Mercadería"
+sidebarTitle: "Compras"
+description: "Crea órdenes de compra a proveedores, programa fechas de entrega y recibe mercadería para incrementar el stock automáticamente."
+---
+
+El módulo de **Compras** gestiona el abastecimiento de mercadería desde la creación de la orden hasta la recepción física en almacén. Una orden de compra comienza con estado `PENDIENTE` y no afecta el stock hasta que se confirma su recepción con el endpoint `PATCH /api/compras/{id}/recibir`. En ese momento, el backend incrementa el `stockActual` de cada producto incluido en la orden y registra los movimientos de inventario correspondientes, todo en una sola transacción atómica.
+
+## Ciclo de Vida de una Compra
+
+<Steps>
+  <Step title="Crear la orden de compra">
+    El ADMIN o ALMACENERO selecciona un proveedor, una fecha esperada de entrega opcional, observaciones y agrega los productos con sus cantidades y precios unitarios de compra. El sistema acepta búsqueda por nombre, código interno o escaneo de código de barras para agregar productos rápidamente. La orden queda con estado **PENDIENTE** y no modifica el stock.
+  </Step>
+  <Step title="El proveedor prepara el pedido">
+    Durante este período la orden permanece en estado `PENDIENTE`. El campo `fechaEsperada` sirve como referencia para el equipo de almacén. La orden visible en la lista de compras y contabilizada en el KPI `comprasPendientes` del Dashboard.
+  </Step>
+  <Step title="Recibir la mercadería">
+    Cuando la mercadería llega al almacén, el ADMIN o ALMACENERO hace clic en **Recibir** en la lista de compras (o llama a `PATCH /api/compras/{id}/recibir`). El sistema valida que la compra esté en estado `PENDIENTE` y ejecuta la recepción.
+  </Step>
+  <Step title="Stock incrementado automáticamente">
+    Por cada línea de detalle, `stockActual` del producto se suma en la cantidad especificada. Se crea un movimiento de inventario con `tipo = ENTRADA` y `motivo = "Recepción compra C-YYYY-NNNN"`.
+  </Step>
+  <Step title="Estado actualizado a RECIBIDA">
+    La orden pasa a estado **RECIBIDA** y ya no aparece en el conteo `comprasPendientes` del Dashboard. El número de compra sigue el patrón `C-YYYY-NNNN`.
+  </Step>
+</Steps>
+
+## Estados de una Compra
+
+| Estado | Descripción |
+|---|---|
+| `PENDIENTE` | Orden creada, esperando recepción de mercadería. |
+| `RECIBIDA` | Mercadería recibida. El stock ya fue incrementado. |
+| `PARCIAL` | Recepción parcial (reservado para uso futuro). |
+| `ANULADA` | Orden cancelada antes de recibirse. |
+
+## Crear una Orden de Compra — API
+
+```http
+POST /api/compras
+Authorization: Bearer <token>   # ADMIN o ALMACENERO
+Content-Type: application/json
+```
+
+```json
+{
+  "proveedorId": 1,
+  "observaciones": "Pedido mensual de reposición — urgente",
+  "fechaEsperada": "2024-02-05",
+  "detalles": [
+    {
+      "productoId": 1,
+      "cantidad": 5,
+      "precioUnitario": 2500.00
+    },
+    {
+      "productoId": 2,
+      "cantidad": 20,
+      "precioUnitario": 45.00
+    }
+  ]
+}
+```
+
+### Campos de la solicitud
+
+| Campo | Tipo | Requerido | Descripción |
+|---|---|:---:|---|
+| `proveedorId` | `Long` | ✅ | ID del proveedor registrado |
+| `observaciones` | `String` | ❌ | Notas internas para el pedido |
+| `fechaEsperada` | `String` (`YYYY-MM-DD`) | ❌ | Fecha estimada de llegada |
+| `detalles` | `Array` | ✅ | Lista de productos a comprar (mínimo 1) |
+| `detalles[].productoId` | `Long` | ✅ | ID del producto |
+| `detalles[].cantidad` | `Integer` | ✅ | Unidades pedidas (mínimo 1) |
+| `detalles[].precioUnitario` | `BigDecimal` | ✅ | Precio de costo unitario (≥ 0) |
+
+El IGV y el total se calculan en el servidor:
+
+```
+subtotal = Σ (precioUnitario × cantidad)
+IGV      = subtotal × 0.18
+total    = subtotal + IGV
+```
+
+**Respuesta `200 OK`:** objeto `Compra` completo con número generado automáticamente y estado `PENDIENTE`.
+
+## Recibir Mercadería — API
+
+```http
+PATCH /api/compras/{id}/recibir
+Authorization: Bearer <token>   # ADMIN o ALMACENERO
+```
+
+Este endpoint no requiere cuerpo. El `id` en la URL identifica la orden de compra que se va a marcar como recibida.
+
+**Respuesta `200 OK`:**
+
+```json
+{
+  "id": 1,
+  "numeroCompra": "C-2024-0001",
+  "estado": "RECIBIDA",
+  "subtotal": 13900.00,
+  "igv": 2502.00,
+  "total": 16402.00,
+  "observaciones": "Pedido mensual de reposición — urgente",
+  "proveedor": {
+    "id": 1,
+    "razonSocial": "Distribuidora Tech SAC",
+    "ruc": "20123456789"
+  },
+  "usuario": {
+    "id": 1,
+    "nombre": "Juan",
+    "apellido": "Pérez"
+  },
+  "fechaCompra": "2024-01-28T09:00:00",
+  "fechaEsperada": "2024-02-05"
+}
+```
+
+<Warning>
+  Solo las compras en estado **`PENDIENTE`** pueden ser recibidas. Si intentas llamar a `PATCH /api/compras/{id}/recibir` sobre una compra que ya está en estado `RECIBIDA`, `PARCIAL` o `ANULADA`, el servidor responderá con:
+
+  ```json
+  {
+    "timestamp": "2024-01-28T09:15:00.000",
+    "status": 400,
+    "error": "Solo se pueden recibir compras PENDIENTES"
+  }
+  ```
+
+  Esto evita duplicar el stock de forma accidental si el endpoint se llama más de una vez.
+</Warning>
+
+## Listar y Consultar Compras
+
+```http
+GET /api/compras
+Authorization: Bearer <token>
+```
+
+Retorna todas las órdenes de compra registradas, incluyendo las de cualquier estado. Útil para llevar el historial de proveedores.
+
+```http
+GET /api/compras/{id}
+Authorization: Bearer <token>
+```
+
+Detalle completo de una orden de compra. Devuelve `404` si el ID no existe.
+
+## Permisos por Rol
+
+| Operación | ADMIN | VENDEDOR | ALMACENERO |
+|---|:---:|:---:|:---:|
+| Listar / Ver (`GET`) | ✅ | ✅ | ✅ |
+| Crear orden (`POST`) | ✅ | ❌ | ✅ |
+| Recibir mercadería (`PATCH`) | ✅ | ❌ | ✅ |
+
+<Note>
+  Cuando se crea una nueva orden de compra, el número se genera con el patrón `C-YYYY-NNNN` donde `YYYY` es el año actual y `NNNN` es un secuencial con ceros a la izquierda (ej. `C-2024-0007`). El contador se basa en el total de registros en la tabla `compras` al momento de la creación.
+</Note>

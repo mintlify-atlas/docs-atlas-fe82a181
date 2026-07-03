@@ -1,0 +1,332 @@
+---
+title: "Sales API — Register, Query, and Void Transactions"
+sidebarTitle: "Ventas"
+description: "Gestiona ventas en /api/ventas: lista, registra (ADMIN/VENDEDOR), y anula (ADMIN). El stock se descuenta automáticamente al registrar."
+---
+
+The Ventas module is the core transactional engine of Tiendas Mi Cholo. Every sale creates a fully-audited record with auto-generated comprobante number, automatic IGV (18%) calculation, and real-time stock deduction for each line item. Roles `ADMIN` and `VENDEDOR` can register sales; only `ADMIN` may void them. All authenticated roles can read the sales list.
+
+---
+
+## GET /api/ventas
+
+List all sales recorded in the system, sorted by the default JPA fetch order. Accessible by all authenticated roles.
+
+**`GET http://localhost:8080/api/ventas`**
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token — `Authorization: Bearer <token>`
+</ParamField>
+
+### Response `200 OK`
+
+<ResponseField name="id" type="Long">
+  Internal database identifier for the sale.
+</ResponseField>
+
+<ResponseField name="numeroVenta" type="string">
+  Auto-generated sale number in the format `VNT-00001`.
+</ResponseField>
+
+<ResponseField name="tipoComprobante" type="string">
+  Document type: `BOLETA`, `FACTURA`, or `TICKET`.
+</ResponseField>
+
+<ResponseField name="estado" type="string">
+  Current sale status: `COMPLETADA` or `ANULADA`.
+</ResponseField>
+
+<ResponseField name="subtotal" type="BigDecimal">
+  Pre-tax subtotal amount, calculated from line items minus any discounts.
+</ResponseField>
+
+<ResponseField name="igv" type="BigDecimal">
+  18% tax amount (`subtotal × 0.18`).
+</ResponseField>
+
+<ResponseField name="total" type="BigDecimal">
+  Final amount charged (`subtotal + igv`).
+</ResponseField>
+
+<ResponseField name="observaciones" type="string">
+  Optional free-text notes attached to the sale.
+</ResponseField>
+
+<ResponseField name="cliente" type="object">
+  Embedded customer snapshot: `id`, `nombres`, `apellidos`, `nroDoc`.
+</ResponseField>
+
+<ResponseField name="usuario" type="object">
+  Embedded user snapshot: `id`, `nombre`, `apellido`, `username`.
+</ResponseField>
+
+<ResponseField name="fechaVenta" type="string (ISO 8601)">
+  Timestamp when the sale was persisted (`@PrePersist`).
+</ResponseField>
+
+```json Example response
+[
+  {
+    "id": 1,
+    "numeroVenta": "VNT-00001",
+    "tipoComprobante": "BOLETA",
+    "estado": "COMPLETADA",
+    "subtotal": 2711.86,
+    "igv": 488.14,
+    "total": 3200.00,
+    "observaciones": null,
+    "cliente": {
+      "id": 1,
+      "nombres": "Carlos Alberto",
+      "apellidos": "Rodríguez Silva",
+      "nroDoc": "12345678"
+    },
+    "usuario": {
+      "id": 2,
+      "nombre": "Luis",
+      "apellido": "Mendoza",
+      "username": "lmendoza"
+    },
+    "fechaVenta": "2024-01-15T14:30:00"
+  }
+]
+```
+
+```bash cURL
+curl -X GET http://localhost:8080/api/ventas \
+  -H "Authorization: Bearer <token>"
+```
+
+---
+
+## GET /api/ventas/\{id\}
+
+Retrieve a single sale by its database ID. Returns `404` if the sale does not exist.
+
+**`GET http://localhost:8080/api/ventas/{id}`**
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token — `Authorization: Bearer <token>`
+</ParamField>
+
+### Path Parameters
+
+<ParamField path="id" type="Long" required>
+  The internal ID of the sale to retrieve.
+</ParamField>
+
+### Response `200 OK`
+
+Returns the same sale object shape as `GET /api/ventas`.
+
+### Error Codes
+
+| Status | Error |
+|--------|-------|
+| `401 Unauthorized` | Token missing, invalid, or expired. |
+| `404 Not Found` | `"Venta no encontrada: {id}"` |
+
+```bash cURL
+curl -X GET http://localhost:8080/api/ventas/1 \
+  -H "Authorization: Bearer <token>"
+```
+
+---
+
+## POST /api/ventas
+
+Register a new sale. The service resolves the authenticated user from the JWT, validates each line item's stock availability, calculates subtotal/IGV/total, decrements stock for every product, and writes an `Inventario` SALIDA movement — all within a single database transaction.
+
+**`POST http://localhost:8080/api/ventas`**
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token — requires `ADMIN` or `VENDEDOR` role.
+</ParamField>
+
+### Request Body
+
+<ParamField body="clienteId" type="Long" required>
+  ID of the customer associated with this sale.
+</ParamField>
+
+<ParamField body="tipoComprobante" type="string" required>
+  Comprobante type. Accepted values: `BOLETA`, `FACTURA`, `TICKET`.
+</ParamField>
+
+<ParamField body="observaciones" type="string">
+  Optional free-text notes (e.g. payment terms, delivery instructions).
+</ParamField>
+
+<ParamField body="detalles" type="array" required>
+  Line items array. Must contain **at least one** item (`@NotEmpty`).
+
+  <Expandable title="detalles[] fields">
+    <ParamField body="detalles[].productoId" type="Long" required>
+      ID of the product being sold.
+    </ParamField>
+
+    <ParamField body="detalles[].cantidad" type="Integer" required>
+      Units to sell. Minimum value: `1`. Must not exceed current `stockActual`.
+    </ParamField>
+
+    <ParamField body="detalles[].precioUnitario" type="BigDecimal" required>
+      Unit selling price. Must be `>= 0.0`.
+    </ParamField>
+
+    <ParamField body="detalles[].descuento" type="BigDecimal">
+      Percentage discount applied to this line (0.0 – 100.0). Defaults to `0`. The effective line subtotal is: `precioUnitario × cantidad × (1 − descuento/100)`.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<Note>
+  IGV is **always computed server-side** at a fixed rate of 18%.  
+  `igv = subtotal × 0.18` — `total = subtotal + igv`  
+  Do not send tax values in the request body; they will be ignored.
+</Note>
+
+### Response `200 OK`
+
+Returns the persisted `Venta` object including the auto-generated `numeroVenta` and computed `subtotal`, `igv`, and `total`.
+
+### Error Codes
+
+| Status | Meaning |
+|--------|---------|
+| `400 Bad Request` | Validation failure or insufficient stock (see example below). |
+| `401 Unauthorized` | Token missing or invalid. |
+| `403 Forbidden` | Authenticated user does not have `ADMIN` or `VENDEDOR` role. |
+| `404 Not Found` | `clienteId` or any `productoId` does not exist. |
+
+```json 400 — Insufficient stock
+{
+  "timestamp": "2024-01-15T14:31:00",
+  "status": 400,
+  "error": "Stock insuficiente para el producto: Laptop HP 15"
+}
+```
+
+```bash cURL — 2-item sale
+curl -X POST http://localhost:8080/api/ventas \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "clienteId": 1,
+    "tipoComprobante": "BOLETA",
+    "observaciones": "Venta a crédito 30 días",
+    "detalles": [
+      {
+        "productoId": 1,
+        "cantidad": 1,
+        "precioUnitario": 3200.00,
+        "descuento": 0.00
+      },
+      {
+        "productoId": 2,
+        "cantidad": 3,
+        "precioUnitario": 75.00,
+        "descuento": 5.00
+      }
+    ]
+  }'
+```
+
+```json Response — 200 OK
+{
+  "id": 7,
+  "numeroVenta": "VNT-00007",
+  "tipoComprobante": "BOLETA",
+  "estado": "COMPLETADA",
+  "subtotal": 3413.75,
+  "igv": 614.48,
+  "total": 4028.23,
+  "observaciones": "Venta a crédito 30 días",
+  "cliente": {
+    "id": 1,
+    "nombres": "Carlos Alberto",
+    "apellidos": "Rodríguez Silva",
+    "nroDoc": "12345678"
+  },
+  "usuario": {
+    "id": 2,
+    "nombre": "Luis",
+    "apellido": "Mendoza",
+    "username": "lmendoza"
+  },
+  "fechaVenta": "2024-01-15T14:31:05"
+}
+```
+
+---
+
+## PATCH /api/ventas/\{id\}/anular
+
+Void an existing sale. The service restores stock for every line item and creates a corresponding `Inventario` ENTRADA movement (reversal). The sale record is **never deleted** — its `estado` is set to `ANULADA`.
+
+**`PATCH http://localhost:8080/api/ventas/{id}/anular`**
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token — requires `ADMIN` role only.
+</ParamField>
+
+### Path Parameters
+
+<ParamField path="id" type="Long" required>
+  ID of the sale to void.
+</ParamField>
+
+### Response `200 OK`
+
+Returns the updated `Venta` object with `"estado": "ANULADA"`.
+
+<Warning>
+  Once a sale is voided (`ANULADA`) it **cannot be re-activated**. Attempting to void an already-voided sale returns `400 Bad Request`: `"La venta ya está anulada"`. The sale record remains in the database for audit purposes, and the reversed stock movements are permanently logged in the inventory ledger.
+</Warning>
+
+### Error Codes
+
+| Status | Meaning |
+|--------|---------|
+| `400 Bad Request` | Sale is already in `ANULADA` state. |
+| `401 Unauthorized` | Token missing or invalid. |
+| `403 Forbidden` | User does not have `ADMIN` role. |
+| `404 Not Found` | Sale ID does not exist. |
+
+```bash cURL
+curl -X PATCH http://localhost:8080/api/ventas/7/anular \
+  -H "Authorization: Bearer <token>"
+```
+
+```json Response — 200 OK
+{
+  "id": 7,
+  "numeroVenta": "VNT-00007",
+  "tipoComprobante": "BOLETA",
+  "estado": "ANULADA",
+  "subtotal": 3413.75,
+  "igv": 614.48,
+  "total": 4028.23,
+  "observaciones": "Venta a crédito 30 días",
+  "cliente": {
+    "id": 1,
+    "nombres": "Carlos Alberto",
+    "apellidos": "Rodríguez Silva",
+    "nroDoc": "12345678"
+  },
+  "usuario": {
+    "id": 2,
+    "nombre": "Luis",
+    "apellido": "Mendoza",
+    "username": "lmendoza"
+  },
+  "fechaVenta": "2024-01-15T14:31:05"
+}
+```

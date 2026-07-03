@@ -1,0 +1,192 @@
+---
+title: "Gestión de Proveedores y Datos Comerciales"
+sidebarTitle: "Proveedores"
+description: "Administra proveedores con razón social, RUC, persona de contacto y datos de comunicación para gestionar órdenes de compra."
+---
+
+El módulo de Proveedores almacena los datos comerciales de las empresas y personas que abastecen a **Tiendas Mi Cholo**. Cada proveedor activo puede ser referenciado al crear órdenes de compra, permitiendo rastrear de dónde proviene cada lote de mercadería y gestionar la comunicación con el contacto responsable. Todos los roles autenticados (`ADMIN`, `VENDEDOR`, `ALMACENERO`) tienen acceso completo a las operaciones CRUD de este módulo.
+
+---
+
+## Campos del Proveedor
+
+| Campo | Tipo | Requerido | Validación | Descripción |
+|-------|------|:---------:|------------|-------------|
+| `razonSocial` | `String` | ✅ | max=200 | Nombre legal o razón social de la empresa |
+| `ruc` | `String` | ✅ | max=20, **único** | RUC de la empresa proveedora |
+| `email` | `String` | ⬜ | max=150 | Correo electrónico de la empresa |
+| `telefono` | `String` | ⬜ | max=20 | Teléfono de la empresa |
+| `direccion` | `String` | ⬜ | max=300 | Dirección fiscal o comercial |
+| `contacto` | `String` | ⬜ | max=150 | Nombre de la persona de contacto en la empresa |
+| `activo` | `Boolean` | — | default=`true` | Estado del registro (manejado por la API) |
+
+<Tip>
+  El campo `ruc` debe ser único en toda la tabla `proveedores`. Antes de crear un proveedor, usa el endpoint de búsqueda para asegurarte de que el RUC no esté ya registrado bajo una razón social diferente.
+</Tip>
+
+---
+
+## Endpoints
+
+### Listar proveedores activos
+
+```http
+GET /api/proveedores
+Authorization: Bearer <token>
+```
+
+Devuelve todos los proveedores con `activo = true`.
+
+**Respuesta `200 OK`**
+
+```json
+[
+  {
+    "id": 1,
+    "razonSocial": "Distribuidora Tech SAC",
+    "ruc": "20123456789",
+    "email": "ventas@techsac.com",
+    "telefono": "014567890",
+    "direccion": "Av. Industrial 789, Ate",
+    "contacto": "Roberto Flores",
+    "activo": true,
+    "createdAt": "2024-01-01T08:00:00",
+    "updatedAt": "2024-01-15T10:00:00"
+  }
+]
+```
+
+---
+
+### Buscar proveedores
+
+```http
+GET /api/proveedores/buscar?q={término}
+Authorization: Bearer <token>
+```
+
+Búsqueda que consulta simultáneamente por `razonSocial`, `ruc` y `contacto`. Ideal para localizar rápidamente un proveedor al momento de crear una orden de compra.
+
+<ParamField query="q" type="String" required>
+  Término de búsqueda. Puede ser parte de la razón social, el RUC o el nombre del contacto.
+</ParamField>
+
+**Ejemplos:**
+
+```http
+GET /api/proveedores/buscar?q=distribuidora
+GET /api/proveedores/buscar?q=20123456789
+GET /api/proveedores/buscar?q=Roberto
+```
+
+**Respuesta `200 OK`:** lista de proveedores que coinciden con el término, en el mismo formato que el listado general.
+
+---
+
+### Obtener proveedor por ID
+
+```http
+GET /api/proveedores/{id}
+Authorization: Bearer <token>
+```
+
+<ParamField path="id" type="Long" required>
+  ID interno del proveedor.
+</ParamField>
+
+**Respuesta `404 Not Found`:**
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00",
+  "status": 404,
+  "error": "Proveedor no encontrado: 99"
+}
+```
+
+---
+
+### Crear proveedor
+
+```http
+POST /api/proveedores
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "razonSocial": "Importaciones XYZ EIRL",
+  "ruc": "20987654321",
+  "email": "contacto@xyzimport.com",
+  "telefono": "016789012",
+  "direccion": "Calle Comercio 321, San Isidro",
+  "contacto": "Patricia Vega"
+}
+```
+
+**Respuesta `200 OK`:** objeto `Proveedor` creado con su `id` generado automáticamente.
+
+---
+
+### Actualizar proveedor
+
+```http
+PUT /api/proveedores/{id}
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+<ParamField path="id" type="Long" required>
+  ID del proveedor a actualizar.
+</ParamField>
+
+El cuerpo tiene la misma estructura que el `POST`. Los campos `razonSocial`, `ruc`, `email`, `telefono`, `direccion` y `contacto` se actualizan con los valores enviados.
+
+**Respuesta `200 OK`:** objeto `Proveedor` actualizado.
+
+---
+
+### Eliminar proveedor (baja lógica)
+
+```http
+DELETE /api/proveedores/{id}
+Authorization: Bearer <token>
+```
+
+<ParamField path="id" type="Long" required>
+  ID del proveedor a desactivar.
+</ParamField>
+
+Establece `activo = false`. El proveedor **no se elimina** de la base de datos; todas sus órdenes de compra históricas permanecen vinculadas y accesibles. Desaparecerá del listado activo pero no de los registros de compra anteriores.
+
+**Respuesta `204 No Content`** — sin cuerpo.
+
+---
+
+## Flujo de Alta de un Proveedor
+
+<Steps>
+  <Step title="Verificar el RUC">
+    Realiza `GET /api/proveedores/buscar?q={ruc}` para confirmar que el RUC no esté duplicado en el sistema.
+  </Step>
+  <Step title="Registrar el proveedor">
+    Envía `POST /api/proveedores` con los datos comerciales completos. Incluye siempre el campo `contacto` para facilitar las comunicaciones.
+  </Step>
+  <Step title="Guardar el ID">
+    El campo `id` de la respuesta es el que debes usar como `proveedorId` al crear órdenes de compra en `POST /api/compras`.
+  </Step>
+  <Step title="Crear la orden de compra">
+    Con el proveedor registrado, el rol `ADMIN` o `ALMACENERO` puede emitir una nueva orden desde `POST /api/compras`.
+  </Step>
+</Steps>
+
+---
+
+## Respuestas de Error Comunes
+
+| Código | Causa |
+|--------|-------|
+| `400 Bad Request` | Validación fallida (campos requeridos vacíos, `ruc` duplicado) |
+| `401 Unauthorized` | Token JWT ausente, inválido o expirado |
+| `404 Not Found` | El `id` no existe en la base de datos |

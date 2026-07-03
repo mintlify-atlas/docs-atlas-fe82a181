@@ -1,0 +1,207 @@
+---
+title: "Gestión de Clientes y Datos de Contacto"
+sidebarTitle: "Clientes"
+description: "Registra y administra los clientes de la tienda con documentos de identidad (DNI, RUC, Pasaporte, CE), contacto y dirección."
+---
+
+El módulo de Clientes centraliza la base de datos de compradores de **Tiendas Mi Cholo**. Desde aquí se registran personas naturales y empresas con sus documentos de identidad, datos de contacto y dirección. Los clientes son obligatorios al registrar una venta, por lo que mantener esta información actualizada asegura comprobantes y reportes precisos. Todos los roles autenticados (`ADMIN`, `VENDEDOR`, `ALMACENERO`) tienen acceso completo a este módulo.
+
+---
+
+## Tipos de Documento Soportados
+
+El sistema acepta cuatro tipos de documento de identidad definidos como `enum TipoDocumento` en la entidad `Cliente`:
+
+| Valor | Descripción |
+|-------|-------------|
+| `DNI` | Documento Nacional de Identidad (personas naturales peruanas) |
+| `RUC` | Registro Único de Contribuyentes (empresas y personas con actividad comercial) |
+| `PASAPORTE` | Pasaporte (clientes extranjeros) |
+| `CE` | Carné de Extranjería (residentes extranjeros) |
+
+<Tip>
+  El campo `nroDoc` es único en toda la tabla `clientes` y actúa como identificador natural del cliente. Al integrar con sistemas de facturación electrónica (SUNAT, por ejemplo), usa `nroDoc` junto a `tipoDoc` para enlazar registros sin depender del ID interno.
+</Tip>
+
+---
+
+## Campos del Cliente
+
+| Campo | Tipo | Requerido | Validación | Descripción |
+|-------|------|:---------:|------------|-------------|
+| `nombres` | `String` | ✅ | max=100 | Nombres del cliente |
+| `apellidos` | `String` | ✅ | max=100 | Apellidos del cliente |
+| `tipoDoc` | `TipoDocumento` | ✅ | enum | Tipo de documento: `DNI`, `RUC`, `PASAPORTE`, `CE` |
+| `nroDoc` | `String` | ✅ | max=20, **único** | Número de documento de identidad |
+| `email` | `String` | ⬜ | max=150 | Correo electrónico de contacto |
+| `telefono` | `String` | ⬜ | max=20 | Número de teléfono |
+| `direccion` | `String` | ⬜ | max=300 | Dirección postal |
+| `activo` | `Boolean` | — | default=`true` | Estado del registro (manejado por la API) |
+
+---
+
+## Endpoints
+
+### Listar clientes activos
+
+```http
+GET /api/clientes
+Authorization: Bearer <token>
+```
+
+Devuelve todos los clientes con `activo = true`.
+
+**Respuesta `200 OK`**
+
+```json
+[
+  {
+    "id": 1,
+    "nombres": "Carlos Alberto",
+    "apellidos": "Rodríguez Silva",
+    "tipoDoc": "DNI",
+    "nroDoc": "12345678",
+    "email": "carlos@email.com",
+    "telefono": "987654321",
+    "direccion": "Av. Principal 123, Lima",
+    "activo": true,
+    "createdAt": "2024-01-01T08:00:00",
+    "updatedAt": "2024-01-15T10:00:00"
+  }
+]
+```
+
+---
+
+### Buscar clientes
+
+```http
+GET /api/clientes/buscar?q={término}
+Authorization: Bearer <token>
+```
+
+Búsqueda flexible que consulta simultáneamente por `nombres`, `apellidos` y `nroDoc`. Útil para localizar un cliente rápidamente desde la pantalla de registro de ventas.
+
+<ParamField query="q" type="String" required>
+  Término de búsqueda. Puede ser parte del nombre, apellido o número de documento.
+</ParamField>
+
+**Ejemplo:**
+
+```http
+GET /api/clientes/buscar?q=carlos
+GET /api/clientes/buscar?q=12345678
+```
+
+**Respuesta `200 OK`:** lista de clientes que coinciden con el término, en el mismo formato que el listado general.
+
+---
+
+### Obtener cliente por ID
+
+```http
+GET /api/clientes/{id}
+Authorization: Bearer <token>
+```
+
+<ParamField path="id" type="Long" required>
+  ID interno del cliente.
+</ParamField>
+
+**Respuesta `404 Not Found`:**
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00",
+  "status": 404,
+  "error": "Cliente no encontrado: 99"
+}
+```
+
+---
+
+### Crear cliente
+
+```http
+POST /api/clientes
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "nombres": "Ana Lucía",
+  "apellidos": "Torres Mendoza",
+  "tipoDoc": "DNI",
+  "nroDoc": "87654321",
+  "email": "ana@email.com",
+  "telefono": "912345678",
+  "direccion": "Jr. Los Olivos 456, Miraflores"
+}
+```
+
+**Respuesta `200 OK`:** objeto `Cliente` creado con su `id` generado automáticamente.
+
+---
+
+### Actualizar cliente
+
+```http
+PUT /api/clientes/{id}
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+<ParamField path="id" type="Long" required>
+  ID del cliente a actualizar.
+</ParamField>
+
+El cuerpo tiene la misma estructura que el `POST`. Todos los campos se sobrescriben con los valores enviados, incluido `nroDoc` (asegúrate de que el nuevo valor siga siendo único).
+
+**Respuesta `200 OK`:** objeto `Cliente` actualizado.
+
+---
+
+### Eliminar cliente (baja lógica)
+
+```http
+DELETE /api/clientes/{id}
+Authorization: Bearer <token>
+```
+
+<ParamField path="id" type="Long" required>
+  ID del cliente a desactivar.
+</ParamField>
+
+Establece `activo = false`. El cliente **no se borra** de la base de datos; su historial de ventas se preserva íntegramente. El cliente desaparecerá del listado general pero seguirá siendo referenciado en las ventas previas.
+
+**Respuesta `204 No Content`** — sin cuerpo.
+
+---
+
+## Flujo de Registro de un Cliente
+
+<Steps>
+  <Step title="Buscar si ya existe">
+    Antes de crear, usa `GET /api/clientes/buscar?q={nroDoc}` para verificar que el documento no esté registrado y evitar duplicados.
+  </Step>
+  <Step title="Elegir el tipo de documento">
+    Selecciona el `tipoDoc` correcto según la naturaleza del cliente: `DNI` para personas naturales, `RUC` para empresas.
+  </Step>
+  <Step title="Crear el registro">
+    Envía el `POST /api/clientes` con los datos completos. Guarda el `id` retornado para vincularlo en futuras ventas.
+  </Step>
+  <Step title="Asociar en una venta">
+    Al registrar una venta en `POST /api/ventas`, incluye el `clienteId` obtenido en el paso anterior.
+  </Step>
+</Steps>
+
+---
+
+## Respuestas de Error Comunes
+
+| Código | Causa |
+|--------|-------|
+| `400 Bad Request` | Validación fallida (campos requeridos vacíos, `nroDoc` duplicado) |
+| `401 Unauthorized` | Token JWT ausente, inválido o expirado |
+| `404 Not Found` | El `id` no existe en la base de datos |

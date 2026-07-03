@@ -1,0 +1,203 @@
+---
+title: "Gestión de Usuarios y Control de Acceso"
+sidebarTitle: "Usuarios"
+description: "Administra los usuarios del sistema, asigna roles (ADMIN, VENDEDOR, ALMACENERO) y controla el acceso a cada módulo. Solo accesible para ADMIN."
+---
+
+El módulo de Usuarios es el núcleo del control de acceso de **Tiendas Mi Cholo**. Desde aquí, el administrador puede crear nuevas cuentas, asignar roles que determinan a qué partes del sistema puede acceder cada persona, y desactivar cuentas sin perder el historial de operaciones. Todos los endpoints de este módulo requieren un JWT válido con el rol `ADMIN`.
+
+<Warning>
+  Solo los usuarios con rol **ADMIN** pueden acceder a cualquier endpoint bajo `/api/usuarios`. Cualquier otro rol recibirá `403 Forbidden`.
+</Warning>
+
+---
+
+## Roles del Sistema
+
+El sistema de Tiendas Mi Cholo reconoce exactamente tres roles. Cada usuario tiene asignado **uno** de ellos mediante el campo `rolId` en el momento de su creación.
+
+<CardGroup cols={3}>
+  <Card title="ADMIN" icon="shield-halved">
+    Acceso completo a todos los módulos: usuarios, categorías, productos, ventas, compras, reportes PDF y configuración general del sistema.
+  </Card>
+  <Card title="VENDEDOR" icon="cash-register">
+    Puede registrar ventas, gestionar clientes y proveedores, y consultar el inventario. No puede acceder a usuarios, categorías ni reportes.
+  </Card>
+  <Card title="ALMACENERO" icon="warehouse">
+    Puede gestionar productos y compras (crear y recibir órdenes), consultar inventario, y gestionar clientes y proveedores. No puede registrar ventas ni acceder a reportes.
+  </Card>
+</CardGroup>
+
+---
+
+## Campos del Usuario
+
+Cada usuario almacenado en la tabla `usuarios` tiene la siguiente estructura. Al crear o actualizar un usuario, envía un `UsuarioRequest` con los campos descritos a continuación.
+
+<Note>
+  El campo `password` **nunca se devuelve** en ninguna respuesta de la API. El objeto `Usuario` serializado siempre omite ese campo por seguridad.
+</Note>
+
+| Campo | Tipo | Requerido | Validación | Descripción |
+|-------|------|:---------:|------------|-------------|
+| `nombre` | `String` | ✅ | max=100 | Nombre(s) del usuario |
+| `apellido` | `String` | ✅ | max=100 | Apellido(s) del usuario |
+| `username` | `String` | ✅ | max=50, **único** | Nombre de usuario para el login |
+| `email` | `String` | ✅ | formato email, **único** | Correo electrónico del usuario |
+| `password` | `String` | ⬜ | min=6, max=100 | Contraseña en texto plano (se almacena con BCrypt) |
+| `telefono` | `String` | ⬜ | max=20 | Teléfono de contacto |
+| `rolId` | `Long` | ✅ | — | ID del rol a asignar (`1`=ADMIN, `2`=VENDEDOR, `3`=ALMACENERO) |
+| `activo` | `Boolean` | ⬜ | default=`true` | Estado de la cuenta |
+
+---
+
+## Endpoints
+
+### Listar usuarios activos
+
+```http
+GET /api/usuarios
+Authorization: Bearer <token>
+```
+
+Devuelve la lista de todos los usuarios con `activo = true`.
+
+**Respuesta `200 OK`**
+
+```json
+[
+  {
+    "id": 1,
+    "nombre": "Juan",
+    "apellido": "Pérez",
+    "username": "admin",
+    "email": "admin@tienda.com",
+    "telefono": "987654321",
+    "activo": true,
+    "rol": {
+      "id": 1,
+      "nombre": "ADMIN",
+      "descripcion": "Administrador del sistema"
+    },
+    "createdAt": "2024-01-01T08:00:00",
+    "updatedAt": "2024-01-15T10:00:00"
+  }
+]
+```
+
+---
+
+### Obtener usuario por ID
+
+```http
+GET /api/usuarios/{id}
+Authorization: Bearer <token>
+```
+
+<ParamField path="id" type="Long" required>
+  ID interno del usuario.
+</ParamField>
+
+**Respuesta `404 Not Found`** si el ID no existe:
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00",
+  "status": 404,
+  "error": "Usuario no encontrado: 99"
+}
+```
+
+---
+
+### Crear usuario
+
+```http
+POST /api/usuarios
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```json
+{
+  "nombre": "María",
+  "apellido": "García",
+  "username": "mgarcia",
+  "email": "maria@tienda.com",
+  "password": "segura123",
+  "telefono": "912345678",
+  "rolId": 2,
+  "activo": true
+}
+```
+
+La contraseña se encripta automáticamente con **BCrypt** antes de persistirse. Nunca se almacena en texto plano.
+
+**Respuesta `200 OK`:** objeto `Usuario` creado (sin `password`).
+
+---
+
+### Actualizar usuario
+
+```http
+PUT /api/usuarios/{id}
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+<ParamField path="id" type="Long" required>
+  ID del usuario a actualizar.
+</ParamField>
+
+El cuerpo tiene la misma estructura que el `POST`. Ten en cuenta las siguientes reglas especiales:
+
+- Si `password` se omite o se envía como cadena vacía (`""`), **la contraseña existente no se modifica**.
+- Si `activo` se incluye, permite activar o desactivar la cuenta directamente desde el `PUT`.
+- El campo `username` **no se puede cambiar** desde la actualización; se ignora en el procesamiento del `PUT`.
+
+---
+
+### Eliminar usuario (baja lógica)
+
+```http
+DELETE /api/usuarios/{id}
+Authorization: Bearer <token>
+```
+
+<ParamField path="id" type="Long" required>
+  ID del usuario a desactivar.
+</ParamField>
+
+El `DELETE` **no borra el registro** de la base de datos. Únicamente establece `activo = false` en la fila correspondiente. El usuario deja de poder iniciar sesión (Spring Security usa `isEnabled()` que retorna el valor de `activo`), pero todo su historial de ventas, compras y movimientos de inventario queda intacto.
+
+**Respuesta `204 No Content`** — sin cuerpo.
+
+---
+
+## Flujo de Creación de un Usuario
+
+<Steps>
+  <Step title="Consultar roles disponibles">
+    Llama a `GET /api/roles` para obtener los IDs de los roles y elegir el `rolId` correcto.
+  </Step>
+  <Step title="Enviar el POST">
+    Construye el `UsuarioRequest` con los datos del nuevo operador e incluye una contraseña de al menos 6 caracteres.
+  </Step>
+  <Step title="Guardar el ID devuelto">
+    El objeto `Usuario` en la respuesta incluye el `id` generado, que necesitarás para futuras actualizaciones.
+  </Step>
+  <Step title="Verificar el login">
+    Comprueba que el nuevo usuario puede autenticarse correctamente en `POST /api/auth/login` con sus credenciales.
+  </Step>
+</Steps>
+
+---
+
+## Respuestas de Error Comunes
+
+| Código | Causa |
+|--------|-------|
+| `400 Bad Request` | Validación fallida (campos requeridos vacíos, email inválido, password menor a 6 caracteres) |
+| `401 Unauthorized` | Token JWT ausente, inválido o expirado |
+| `403 Forbidden` | El token pertenece a un rol distinto de `ADMIN` |
+| `404 Not Found` | El `id` o el `rolId` proporcionado no existe en la base de datos |

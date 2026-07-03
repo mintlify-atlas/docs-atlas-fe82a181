@@ -1,0 +1,173 @@
+---
+title: "Gestión de Productos y Catálogo de Inventario"
+sidebarTitle: "Productos"
+description: "Administra el catálogo de productos con precios de compra/venta, stock mínimo, categorías y alertas automáticas de stock bajo."
+---
+
+El módulo de **Productos** es el corazón del catálogo de Tiendas Mi Cholo. Desde aquí se registran todos los artículos que la tienda compra y vende, incluyendo su precio de costo, precio de venta al público, unidad de medida, moneda, código de barras y el almacén donde se encuentran físicamente. El stock de cada producto se actualiza de forma automática cada vez que se registra una venta (descuenta unidades) o se recibe una compra (suma unidades), sin intervención manual.
+
+## Características Principales
+
+- **Código único por producto** — el campo `codigo` es único en la base de datos e inmutable una vez creado.
+- **Doble precio** — se mantienen por separado el `precioCompra` (costo) y el `precioVenta` (precio al cliente).
+- **Control de stock automático** — `stockActual` se modifica transaccionalmente al registrar ventas o recibir compras.
+- **Alertas de stock mínimo** — cuando `stockActual ≤ stockMinimo`, el producto aparece en el widget del Dashboard y en el endpoint `/api/productos/stock-bajo`.
+- **Código de barras** — compatible con lectores USB; el campo `codigoBarras` se usa en el POS de ventas y compras para escaneo rápido.
+- **Importación masiva desde Excel** — sube un archivo `.xlsx` para crear o actualizar cientos de productos de una sola vez.
+
+## Campos del Producto
+
+La entidad `Producto` (tabla `productos` en MySQL) expone los siguientes campos a través de la API:
+
+| Campo | Tipo | Requerido | Valor por defecto | Descripción |
+|---|---|:---:|---|---|
+| `id` | `Long` | — | auto | Identificador interno |
+| `codigo` | `String` (max 50) | ✅ | — | Código único de referencia interna |
+| `nombre` | `String` (max 150) | ✅ | — | Nombre del producto |
+| `descripcion` | `String` (TEXT) | ❌ | `null` | Descripción larga |
+| `precioCompra` | `BigDecimal` | ✅ | `0.00` | Precio de costo |
+| `precioVenta` | `BigDecimal` | ✅ | `0.00` | Precio al público |
+| `stockActual` | `Integer` | ❌ | `0` | Unidades disponibles en almacén |
+| `stockMinimo` | `Integer` | ❌ | `5` | Umbral para alerta de stock bajo |
+| `imagenUrl` | `String` (max 500) | ❌ | `null` | URL de imagen del producto |
+| `codigoBarras` | `String` (max 50) | ❌ | `null` | Código EAN/UPC para escáner |
+| `unidadMedida` | `String` (max 50) | ❌ | `"UNIDADES"` | Ej.: `KG`, `PAQUETE`, `LITROS` |
+| `moneda` | `String` (max 10) | ❌ | `"PEN"` | `PEN` (S/) o `USD` ($) |
+| `categoriaId` | `Long` | ✅ | — | Categoría a la que pertenece |
+| `almacenId` | `Long` | ❌ | `null` | Almacén físico (opcional) |
+| `activo` | `Boolean` | ❌ | `true` | Borrado lógico |
+
+## Gestión de Stock
+
+El `stockActual` **nunca se edita directamente** mediante el endpoint `PUT /api/productos/{id}`. El PUT ignora cualquier cambio a ese campo. Las únicas operaciones que modifican el stock son:
+
+- **Venta registrada** → `stockActual -= cantidad` por cada ítem del detalle.
+- **Compra recibida** → `stockActual += cantidad` por cada ítem del detalle.
+- **Venta anulada** → `stockActual += cantidad` (reversión).
+
+Cuando `stockActual ≤ stockMinimo`, el producto es clasificado como "stock bajo". El Dashboard muestra el conteo en la tarjeta **Alertas Stock** y lista los productos afectados con sus valores `stockActual` y `stockMinimo`.
+
+## Endpoints de la API
+
+<Tabs>
+  <Tab title="Listar / Buscar">
+    ```http
+    GET /api/productos
+    ```
+    Devuelve todos los productos con `activo = true`. Incluye los objetos anidados `categoria` y `almacen`.
+
+    ```http
+    GET /api/productos/buscar?q=laptop
+    ```
+    Búsqueda full-text por `nombre`, `codigo` o `descripcion`.
+
+    ```http
+    GET /api/productos/{id}
+    ```
+    Obtiene un producto por su ID. Devuelve `404` si no existe o está inactivo.
+  </Tab>
+  <Tab title="Crear / Editar">
+    ```http
+    POST /api/productos
+    Authorization: Bearer <token>   # ADMIN o ALMACENERO
+    Content-Type: application/json
+    ```
+
+    ```json
+    {
+      "codigo": "PROD-002",
+      "nombre": "Mouse Logitech M185",
+      "descripcion": "Mouse inalámbrico compacto",
+      "precioCompra": 45.00,
+      "precioVenta": 75.00,
+      "stockActual": 50,
+      "stockMinimo": 10,
+      "imagenUrl": "https://example.com/mouse.jpg",
+      "codigoBarras": "7501234567890",
+      "unidadMedida": "UNIDADES",
+      "moneda": "PEN",
+      "categoriaId": 1,
+      "almacenId": 1,
+      "activo": true
+    }
+    ```
+
+    ```http
+    PUT /api/productos/{id}
+    Authorization: Bearer <token>   # ADMIN o ALMACENERO
+    ```
+
+    Actualiza todos los campos excepto `codigo` y `stockActual`.
+  </Tab>
+  <Tab title="Eliminar">
+    ```http
+    DELETE /api/productos/{id}
+    Authorization: Bearer <token>   # Solo ADMIN
+    ```
+
+    Realiza **borrado lógico**: establece `activo = false`. El producto deja de aparecer en listados pero su historial de ventas e inventario permanece intacto.
+
+    **Respuesta:** `204 No Content`
+  </Tab>
+</Tabs>
+
+## Importación Masiva desde Excel
+
+El endpoint de importación acepta un arreglo JSON derivado de un archivo `.xlsx` y aplica lógica **upsert** (actualizar si existe, crear si no existe):
+
+```http
+POST /api/productos/importar
+Authorization: Bearer <token>   # ADMIN o ALMACENERO
+Content-Type: application/json
+```
+
+**Request Body:** arreglo de objetos con la misma estructura que el `POST /api/productos`, más el campo adicional `categoriaNombre`.
+
+```json
+[
+  {
+    "codigo": "PROD-001",
+    "nombre": "Laptop HP 15",
+    "precioCompra": 2500.00,
+    "precioVenta": 3200.00,
+    "stockActual": 10,
+    "stockMinimo": 3,
+    "categoriaNombre": "Electrónica",
+    "codigoBarras": "7501111111111",
+    "unidadMedida": "UNIDADES",
+    "moneda": "PEN"
+  },
+  {
+    "codigo": "PROD-010",
+    "nombre": "Arroz Costeño 1kg",
+    "precioCompra": 3.50,
+    "precioVenta": 5.00,
+    "categoriaNombre": "Abarrotes"
+  }
+]
+```
+
+### Lógica de upsert
+
+1. Para cada fila del arreglo, se busca por `codigo` en la base de datos (`findByCodigo`).
+2. **Si existe** → se actualizan todos los campos enviados (excepto `codigo`).
+3. **Si no existe** → se crea un nuevo producto con los valores proporcionados y defaults para los campos omitidos (`stockActual=0`, `stockMinimo=5`, `unidadMedida="UNIDADES"`, `moneda="PEN"`).
+4. **Categoría automática** — si `categoriaNombre` está presente y no se encontró la categoría en la BD, se **crea automáticamente** la categoría. Si no se proporciona ningún identificador de categoría, el producto cae en la categoría `"Abarrotes"` (creada si tampoco existe).
+5. Las filas con `codigo` vacío o `nombre` vacío son **ignoradas silenciosamente**.
+
+**Respuesta:** arreglo con los productos procesados (creados o actualizados).
+
+El frontend Angular soporta la carga del archivo `.xlsx` directamente desde la interfaz (botón **Importar Excel**). Internamente usa la biblioteca `xlsx` para parsear las columnas del archivo y mapearlas a los campos del modelo antes de llamar a este endpoint.
+
+## Permisos por Rol
+
+| Operación | ADMIN | VENDEDOR | ALMACENERO |
+|---|:---:|:---:|:---:|
+| Listar / Ver / Buscar | ✅ | ✅ | ✅ |
+| Crear / Editar | ✅ | ❌ | ✅ |
+| Importar Excel | ✅ | ❌ | ✅ |
+| Eliminar (borrado lógico) | ✅ | ❌ | ❌ |
+
+<Tip>
+  Usa `GET /api/productos/stock-bajo` para obtener en tiempo real la lista de productos que necesitan reposición. Este mismo endpoint alimenta el widget del Dashboard. Intégralo en tus rutinas diarias de reabastecimiento para generar órdenes de compra antes de que el stock llegue a cero.
+</Tip>

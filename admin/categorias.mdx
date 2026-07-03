@@ -1,0 +1,188 @@
+---
+title: "Categorías de Productos: Organización del Catálogo"
+sidebarTitle: "Categorías"
+description: "Crea y gestiona categorías para organizar el catálogo de productos. La creación, edición y eliminación está restringida al rol ADMIN."
+---
+
+Las categorías son la estructura organizativa del catálogo de **Tiendas Mi Cholo**. Cada producto debe pertenecer a una categoría activa, lo que facilita la navegación, el filtrado y la generación de reportes de inventario agrupados. La gestión de categorías está parcialmente restringida: cualquier rol puede consultarlas, pero solo `ADMIN` puede crearlas, editarlas o desactivarlas.
+
+<Note>
+  **Lectura:** todos los roles autenticados (`ADMIN`, `VENDEDOR`, `ALMACENERO`) pueden usar `GET /api/categorias` y `GET /api/categorias/{id}`.
+
+  **Escritura:** solo el rol `ADMIN` puede ejecutar `POST`, `PUT` y `DELETE`. Cualquier otro rol recibirá `403 Forbidden` en estas operaciones.
+</Note>
+
+---
+
+## Campos de la Categoría
+
+| Campo | Tipo | Requerido | Validación | Descripción |
+|-------|------|:---------:|------------|-------------|
+| `nombre` | `String` | ✅ | max=100, **único** | Nombre descriptivo de la categoría |
+| `descripcion` | `String` | ⬜ | max=300 | Detalle o propósito de la categoría |
+| `activo` | `Boolean` | — | default=`true` | Estado del registro (manejado por la API) |
+
+---
+
+## Endpoints
+
+### Listar categorías activas
+
+```http
+GET /api/categorias
+Authorization: Bearer <token>
+```
+
+Disponible para todos los roles. Devuelve únicamente las categorías con `activo = true`.
+
+**Respuesta `200 OK`**
+
+```json
+[
+  {
+    "id": 1,
+    "nombre": "Electrónica",
+    "descripcion": "Dispositivos electrónicos y accesorios",
+    "activo": true,
+    "createdAt": "2024-01-01T08:00:00"
+  },
+  {
+    "id": 2,
+    "nombre": "Ropa",
+    "descripcion": "Prendas de vestir para toda la familia",
+    "activo": true,
+    "createdAt": "2024-01-03T09:30:00"
+  }
+]
+```
+
+---
+
+### Obtener categoría por ID
+
+```http
+GET /api/categorias/{id}
+Authorization: Bearer <token>
+```
+
+Disponible para todos los roles.
+
+<ParamField path="id" type="Long" required>
+  ID interno de la categoría.
+</ParamField>
+
+**Respuesta `404 Not Found`:**
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00",
+  "status": 404,
+  "error": "Categoría no encontrada: 99"
+}
+```
+
+---
+
+### Crear categoría
+
+```http
+POST /api/categorias
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Rol requerido:** `ADMIN`
+
+```json
+{
+  "nombre": "Ropa y Calzado",
+  "descripcion": "Prendas de vestir y calzado para toda la familia"
+}
+```
+
+El `nombre` debe ser único en la tabla. Si ya existe una categoría con ese nombre (incluso si está inactiva), la solicitud fallará.
+
+**Respuesta `200 OK`:** objeto `Categoria` creado con su `id` y `createdAt`.
+
+---
+
+### Actualizar categoría
+
+```http
+PUT /api/categorias/{id}
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Rol requerido:** `ADMIN`
+
+<ParamField path="id" type="Long" required>
+  ID de la categoría a actualizar.
+</ParamField>
+
+```json
+{
+  "nombre": "Electrónica y Cómputo",
+  "descripcion": "Dispositivos electrónicos, computadoras y accesorios"
+}
+```
+
+Solo se actualizan `nombre` y `descripcion`. El campo `activo` no cambia con este endpoint.
+
+**Respuesta `200 OK`:** objeto `Categoria` actualizado.
+
+---
+
+### Eliminar categoría (baja lógica)
+
+```http
+DELETE /api/categorias/{id}
+Authorization: Bearer <token>
+```
+
+**Rol requerido:** `ADMIN`
+
+<ParamField path="id" type="Long" required>
+  ID de la categoría a desactivar.
+</ParamField>
+
+Establece `activo = false`. La categoría **no se elimina** de la base de datos; los productos ya asociados conservan la referencia. La categoría desaparece del listado activo, pero los productos activos que la referencian siguen operativos.
+
+**Respuesta `204 No Content`** — sin cuerpo.
+
+---
+
+## Relación con Productos
+
+Las categorías son un requisito directo al trabajar con el catálogo de productos:
+
+- **Al crear un producto** (`POST /api/productos`), el campo `categoriaId` es **obligatorio** y debe apuntar a una categoría con `activo = true`.
+- **Al importar productos en lote** (`POST /api/productos/importar`), si el nombre de categoría incluido en el CSV/JSON no existe, el sistema puede **auto-crear** la categoría por nombre antes de vincular el producto.
+- En el **reporte de inventario PDF** (`GET /api/reportes/inventario`), los productos se muestran con el nombre de su categoría en la columna correspondiente.
+
+---
+
+## Flujo de Creación de una Categoría
+
+<Steps>
+  <Step title="Verificar duplicados">
+    Consulta `GET /api/categorias` y verifica que no exista ya una categoría con el mismo nombre. El campo `nombre` tiene restricción de unicidad en base de datos.
+  </Step>
+  <Step title="Crear la categoría">
+    Envía `POST /api/categorias` con `nombre` (obligatorio) y `descripcion` (opcional). Guarda el `id` devuelto.
+  </Step>
+  <Step title="Asignar a productos">
+    Usa el `id` como valor de `categoriaId` al crear o actualizar productos en `POST /api/productos` o `PUT /api/productos/{id}`.
+  </Step>
+</Steps>
+
+---
+
+## Respuestas de Error Comunes
+
+| Código | Causa |
+|--------|-------|
+| `400 Bad Request` | Nombre vacío o `nombre` duplicado en la tabla |
+| `401 Unauthorized` | Token JWT ausente, inválido o expirado |
+| `403 Forbidden` | El token pertenece a un rol distinto de `ADMIN` (en POST, PUT, DELETE) |
+| `404 Not Found` | El `id` no existe en la base de datos |

@@ -1,0 +1,297 @@
+---
+title: "Suppliers API — Vendor Management and Search"
+sidebarTitle: "Proveedores"
+description: "CRUD de proveedores en /api/proveedores con búsqueda por razón social, RUC o contacto. RUC único. Accesible para todos los roles autenticados."
+---
+
+El módulo de proveedores gestiona el directorio de empresas y personas que suministran mercancía a **Tiendas Mi Cholo**. El campo `ruc` es único por proveedor y sirve como identificador fiscal. La búsqueda permite localizar proveedores por razón social, RUC o nombre de contacto. El borrado es **lógico** (`activo = false`). El historial de compras asociado al proveedor se conserva siempre. Todos los roles autenticados tienen acceso completo.
+
+<Note>
+  Todos los endpoints requieren `Authorization: Bearer <token>`. Cualquier rol autenticado (`ADMIN`, `VENDEDOR`, `ALMACENERO`) puede crear, editar y consultar proveedores.
+</Note>
+
+---
+
+## GET /api/proveedores
+
+Lista todos los proveedores con `activo = true`.
+
+### Ejemplo
+
+```bash
+curl -s http://localhost:8080/api/proveedores \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+**Respuesta 200 OK:**
+
+```json
+[
+  {
+    "id": 1,
+    "razonSocial": "Distribuidora Tech SAC",
+    "ruc": "20123456789",
+    "email": "ventas@techsac.com",
+    "telefono": "014567890",
+    "direccion": "Av. Industrial 789, Ate, Lima",
+    "contacto": "Roberto Flores",
+    "activo": true,
+    "createdAt": "2024-01-01T08:00:00",
+    "updatedAt": "2024-01-15T10:00:00"
+  }
+]
+```
+
+### Response fields
+
+<ResponseField name="id" type="integer">
+  Identificador único del proveedor. Se usa como `proveedorId` al registrar órdenes de compra.
+</ResponseField>
+
+<ResponseField name="razonSocial" type="string">
+  Razón social o nombre comercial del proveedor. Máximo 200 caracteres.
+</ResponseField>
+
+<ResponseField name="ruc" type="string">
+  RUC del proveedor. Único en el sistema. Máximo 20 caracteres. Para personas naturales puede usarse DNI.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Correo electrónico de contacto comercial. Puede ser `null`.
+</ResponseField>
+
+<ResponseField name="telefono" type="string">
+  Teléfono de la empresa. Máximo 20 caracteres. Puede ser `null`.
+</ResponseField>
+
+<ResponseField name="direccion" type="string">
+  Dirección fiscal o de despacho. Máximo 300 caracteres. Puede ser `null`.
+</ResponseField>
+
+<ResponseField name="contacto" type="string">
+  Nombre de la persona de contacto en la empresa. Máximo 150 caracteres. Puede ser `null`.
+</ResponseField>
+
+<ResponseField name="activo" type="boolean">
+  Estado del proveedor. Los inactivos no aparecen en `GET /api/proveedores`.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  Fecha y hora de creación (ISO 8601).
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  Fecha y hora de última modificación (ISO 8601).
+</ResponseField>
+
+---
+
+## GET /api/proveedores/buscar
+
+Busca proveedores activos por razón social, RUC o nombre de contacto.
+
+### Query parameters
+
+<ParamField query="q" type="string" required>
+  Término de búsqueda. Se aplica sobre `razonSocial`, `ruc` y `contacto` con coincidencia parcial (LIKE).
+</ParamField>
+
+### Ejemplo
+
+```bash
+curl -s "http://localhost:8080/api/proveedores/buscar?q=distribuidora" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+<Tip>
+  Usa este endpoint en el formulario de nueva orden de compra para buscar y seleccionar el proveedor en tiempo real.
+</Tip>
+
+---
+
+## GET /api/proveedores/\{id\}
+
+Obtiene un proveedor por su ID.
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID del proveedor a consultar.
+</ParamField>
+
+### Ejemplo
+
+```bash
+curl -s http://localhost:8080/api/proveedores/1 \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+**Respuesta 404 Not Found:**
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00",
+  "status": 404,
+  "error": "Proveedor no encontrado: 99"
+}
+```
+
+---
+
+## POST /api/proveedores
+
+Registra un nuevo proveedor en el directorio.
+
+### Request body
+
+<ParamField body="razonSocial" type="string" required>
+  Razón social o nombre comercial. Máximo 200 caracteres.
+</ParamField>
+
+<ParamField body="ruc" type="string" required>
+  RUC de la empresa. Debe ser único en el sistema. Máximo 20 caracteres.
+</ParamField>
+
+<ParamField body="email" type="string">
+  Correo electrónico de contacto. Máximo 150 caracteres.
+</ParamField>
+
+<ParamField body="telefono" type="string">
+  Teléfono de la empresa. Máximo 20 caracteres.
+</ParamField>
+
+<ParamField body="direccion" type="string">
+  Dirección fiscal o de despacho. Máximo 300 caracteres.
+</ParamField>
+
+<ParamField body="contacto" type="string">
+  Nombre de la persona de contacto. Máximo 150 caracteres.
+</ParamField>
+
+### Ejemplo
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl -s -X POST http://localhost:8080/api/proveedores \
+      -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+      -H "Content-Type: application/json" \
+      -d '{
+        "razonSocial": "Importaciones XYZ EIRL",
+        "ruc": "20987654321",
+        "email": "contacto@xyzimport.com",
+        "telefono": "016789012",
+        "direccion": "Calle Comercio 321, San Isidro, Lima",
+        "contacto": "Patricia Vega"
+      }'
+    ```
+  </Tab>
+  <Tab title="Request JSON">
+    ```json
+    {
+      "razonSocial": "Importaciones XYZ EIRL",
+      "ruc": "20987654321",
+      "email": "contacto@xyzimport.com",
+      "telefono": "016789012",
+      "direccion": "Calle Comercio 321, San Isidro, Lima",
+      "contacto": "Patricia Vega"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+**Respuesta 200 OK:**
+
+```json
+{
+  "id": 3,
+  "razonSocial": "Importaciones XYZ EIRL",
+  "ruc": "20987654321",
+  "email": "contacto@xyzimport.com",
+  "telefono": "016789012",
+  "direccion": "Calle Comercio 321, San Isidro, Lima",
+  "contacto": "Patricia Vega",
+  "activo": true,
+  "createdAt": "2024-01-15T14:30:00",
+  "updatedAt": "2024-01-15T14:30:00"
+}
+```
+
+---
+
+## PUT /api/proveedores/\{id\}
+
+Actualiza los datos de un proveedor existente.
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID del proveedor a actualizar.
+</ParamField>
+
+### Request body
+
+Mismos campos que `POST /api/proveedores`. Todos los campos provistos sobreescriben los existentes.
+
+### Ejemplo
+
+```bash
+curl -s -X PUT http://localhost:8080/api/proveedores/3 \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "razonSocial": "Importaciones XYZ EIRL",
+    "ruc": "20987654321",
+    "email": "ventas@xyzimport.com",
+    "telefono": "016789099",
+    "direccion": "Av. República de Panamá 3030, San Isidro, Lima",
+    "contacto": "Patricia Vega Salas"
+  }'
+```
+
+**Respuesta 200 OK** — retorna el proveedor actualizado.
+
+---
+
+## DELETE /api/proveedores/\{id\}
+
+Desactiva un proveedor (borrado lógico — `activo = false`). El historial de compras asociado se conserva.
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID del proveedor a desactivar.
+</ParamField>
+
+### Ejemplo
+
+```bash
+curl -s -X DELETE http://localhost:8080/api/proveedores/3 \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+**Respuesta:** `204 No Content` (sin cuerpo).
+
+<Warning>
+  Desactivar un proveedor no elimina las órdenes de compra históricas asociadas. Los registros se conservan para auditoría y reportes contables.
+</Warning>
+
+---
+
+## Códigos de error
+
+| Código | Descripción | Causa habitual |
+|--------|-------------|----------------|
+| `400 Bad Request` | Validación fallida | `razonSocial` vacío, `ruc` duplicado |
+| `401 Unauthorized` | No autenticado | Token ausente, inválido o expirado |
+| `404 Not Found` | Proveedor no encontrado | El `id` no existe en la base de datos |
+
+**Respuesta 400 (RUC duplicado):**
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00",
+  "status": 400,
+  "error": "Duplicate entry '20987654321' for key 'proveedores.ruc'"
+}
+```

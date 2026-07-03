@@ -1,0 +1,220 @@
+---
+title: "Categories API — Product Category Management"
+sidebarTitle: "Categorías"
+description: "CRUD de categorías en /api/categorias. Listar y ver: todos los roles. Crear, editar y eliminar: solo ADMIN. Nombres únicos, borrado lógico."
+---
+
+Las categorías agrupan el catálogo de productos de **Tiendas Mi Cholo**. Cualquier usuario autenticado puede consultar y ver categorías, pero solo el rol `ADMIN` puede crear, modificar o desactivar una categoría. Los nombres de categoría son únicos en el sistema. El borrado es **lógico**: una categoría eliminada no aparece en los listados pero sus productos no se ven afectados.
+
+---
+
+## GET /api/categorias
+
+Lista todas las categorías con `activo = true`.
+
+**Autenticación:** cualquier rol autenticado.
+
+### Ejemplo
+
+```bash
+curl -s http://localhost:8080/api/categorias \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+**Respuesta 200 OK:**
+
+```json
+[
+  {
+    "id": 1,
+    "nombre": "Electrónica",
+    "descripcion": "Dispositivos electrónicos y accesorios",
+    "activo": true,
+    "createdAt": "2024-01-01T08:00:00"
+  },
+  {
+    "id": 2,
+    "nombre": "Abarrotes",
+    "descripcion": "Productos de primera necesidad",
+    "activo": true,
+    "createdAt": "2024-01-01T08:00:00"
+  }
+]
+```
+
+### Response fields
+
+<ResponseField name="id" type="integer">
+  Identificador único de la categoría. Usar como `categoriaId` al crear productos.
+</ResponseField>
+
+<ResponseField name="nombre" type="string">
+  Nombre de la categoría. Único en el sistema.
+</ResponseField>
+
+<ResponseField name="descripcion" type="string">
+  Descripción detallada de la categoría. Puede ser `null`.
+</ResponseField>
+
+<ResponseField name="activo" type="boolean">
+  `true` si la categoría está activa. Las categorías con `activo = false` no aparecen en este listado.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  Fecha y hora de creación (ISO 8601).
+</ResponseField>
+
+---
+
+## GET /api/categorias/\{id\}
+
+Obtiene una categoría por su ID, incluso si está inactiva.
+
+**Autenticación:** cualquier rol autenticado.
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID de la categoría a consultar.
+</ParamField>
+
+### Ejemplo
+
+```bash
+curl -s http://localhost:8080/api/categorias/1 \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+**Respuesta 404 Not Found:**
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00",
+  "status": 404,
+  "error": "Categoría no encontrada: 99"
+}
+```
+
+---
+
+## POST /api/categorias
+
+Crea una nueva categoría. **Solo ADMIN.**
+
+### Request body
+
+<ParamField body="nombre" type="string" required>
+  Nombre de la categoría. Máximo 100 caracteres. Debe ser único en el sistema.
+</ParamField>
+
+<ParamField body="descripcion" type="string">
+  Descripción de la categoría. Máximo 300 caracteres.
+</ParamField>
+
+### Ejemplo
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl -s -X POST http://localhost:8080/api/categorias \
+      -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+      -H "Content-Type: application/json" \
+      -d '{
+        "nombre": "Ropa y Calzado",
+        "descripcion": "Prendas de vestir y calzado para toda la familia"
+      }'
+    ```
+  </Tab>
+  <Tab title="Request JSON">
+    ```json
+    {
+      "nombre": "Ropa y Calzado",
+      "descripcion": "Prendas de vestir y calzado para toda la familia"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+**Respuesta 200 OK:**
+
+```json
+{
+  "id": 5,
+  "nombre": "Ropa y Calzado",
+  "descripcion": "Prendas de vestir y calzado para toda la familia",
+  "activo": true,
+  "createdAt": "2024-01-15T15:00:00"
+}
+```
+
+---
+
+## PUT /api/categorias/\{id\}
+
+Actualiza el nombre y/o descripción de una categoría existente. **Solo ADMIN.**
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID de la categoría a actualizar.
+</ParamField>
+
+### Request body
+
+<ParamField body="nombre" type="string" required>
+  Nuevo nombre de la categoría. Máximo 100 caracteres.
+</ParamField>
+
+<ParamField body="descripcion" type="string">
+  Nueva descripción. Máximo 300 caracteres.
+</ParamField>
+
+### Ejemplo
+
+```bash
+curl -s -X PUT http://localhost:8080/api/categorias/5 \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombre": "Ropa, Calzado y Accesorios",
+    "descripcion": "Prendas, calzado y accesorios de moda"
+  }'
+```
+
+**Respuesta 200 OK** — retorna la categoría actualizada.
+
+---
+
+## DELETE /api/categorias/\{id\}
+
+Desactiva una categoría (borrado lógico — establece `activo = false`). **Solo ADMIN.**
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID de la categoría a desactivar.
+</ParamField>
+
+### Ejemplo
+
+```bash
+curl -s -X DELETE http://localhost:8080/api/categorias/5 \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+**Respuesta:** `204 No Content` (sin cuerpo).
+
+<Warning>
+  Desactivar una categoría **no desactiva** los productos asociados a ella. Los productos seguirán listándose aunque su categoría esté inactiva. Antes de desactivar una categoría, considera reasignar sus productos.
+</Warning>
+
+---
+
+## Códigos de error
+
+| Código | Descripción | Causa habitual |
+|--------|-------------|----------------|
+| `400 Bad Request` | Validación fallida | Nombre vacío o supera 100 caracteres |
+| `401 Unauthorized` | No autenticado | Token ausente, inválido o expirado |
+| `403 Forbidden` | Sin permisos | POST/PUT/DELETE con rol distinto de ADMIN |
+| `404 Not Found` | Categoría no encontrada | El `id` no existe en la base de datos |

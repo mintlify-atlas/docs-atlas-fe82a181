@@ -1,0 +1,331 @@
+---
+title: "Purchases API — Create Orders and Receive Stock"
+sidebarTitle: "Compras"
+description: "Gestiona órdenes de compra en /api/compras: crea (ADMIN/ALMACENERO), recibe mercadería e incrementa stock automáticamente al confirmar recepción."
+---
+
+The Compras module manages the full purchase-order lifecycle in Tiendas Mi Cholo — from creating an order with a supplier (`PENDIENTE`) through confirming physical receipt of goods (`RECIBIDA`). When a purchase is marked received, the service automatically increments `stockActual` for each product and writes an `Inventario` ENTRADA movement, all within one database transaction. Roles `ADMIN` and `ALMACENERO` can create and receive orders; all authenticated roles can read purchase data.
+
+---
+
+## GET /api/compras
+
+List all purchase orders recorded in the system. Returns all orders regardless of status.
+
+**`GET http://localhost:8080/api/compras`**
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token — `Authorization: Bearer <token>`
+</ParamField>
+
+### Response `200 OK`
+
+<ResponseField name="id" type="Long">
+  Internal database identifier.
+</ResponseField>
+
+<ResponseField name="numeroCompra" type="string">
+  Auto-generated purchase order number (e.g. `CMP-00001`).
+</ResponseField>
+
+<ResponseField name="estado" type="string">
+  Current state: `PENDIENTE`, `RECIBIDA`, `PARCIAL`, or `ANULADA`.
+</ResponseField>
+
+<ResponseField name="subtotal" type="BigDecimal">
+  Pre-tax subtotal computed from line items (`precio × cantidad`).
+</ResponseField>
+
+<ResponseField name="igv" type="BigDecimal">
+  18% tax: `subtotal × 0.18`.
+</ResponseField>
+
+<ResponseField name="total" type="BigDecimal">
+  Grand total: `subtotal + igv`.
+</ResponseField>
+
+<ResponseField name="observaciones" type="string">
+  Optional free-text notes attached to the order.
+</ResponseField>
+
+<ResponseField name="proveedor" type="object">
+  Embedded supplier snapshot: `id`, `razonSocial`, `ruc`.
+</ResponseField>
+
+<ResponseField name="usuario" type="object">
+  Embedded user who created the order: `id`, `nombre`, `apellido`.
+</ResponseField>
+
+<ResponseField name="fechaCompra" type="string (ISO 8601)">
+  Timestamp when the order was created (`@PrePersist`).
+</ResponseField>
+
+<ResponseField name="fechaEsperada" type="string (YYYY-MM-DD)">
+  Expected delivery date, if provided at creation time.
+</ResponseField>
+
+```json Example response
+[
+  {
+    "id": 1,
+    "numeroCompra": "CMP-00001",
+    "estado": "PENDIENTE",
+    "subtotal": 2118.64,
+    "igv": 381.36,
+    "total": 2500.00,
+    "observaciones": "Pedido urgente",
+    "proveedor": {
+      "id": 1,
+      "razonSocial": "Distribuidora Tech SAC",
+      "ruc": "20123456789"
+    },
+    "usuario": {
+      "id": 1,
+      "nombre": "Juan",
+      "apellido": "Pérez"
+    },
+    "fechaCompra": "2024-01-15T09:00:00",
+    "fechaEsperada": "2024-01-20"
+  }
+]
+```
+
+```bash cURL
+curl -X GET http://localhost:8080/api/compras \
+  -H "Authorization: Bearer <token>"
+```
+
+---
+
+## GET /api/compras/\{id\}
+
+Retrieve a single purchase order by its database ID.
+
+**`GET http://localhost:8080/api/compras/{id}`**
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token — `Authorization: Bearer <token>`
+</ParamField>
+
+### Path Parameters
+
+<ParamField path="id" type="Long" required>
+  The internal ID of the purchase order to retrieve.
+</ParamField>
+
+### Response `200 OK`
+
+Returns the same purchase object shape as `GET /api/compras`.
+
+### Error Codes
+
+| Status | Error |
+|--------|-------|
+| `401 Unauthorized` | Token missing, invalid, or expired. |
+| `404 Not Found` | `"Compra no encontrada: {id}"` |
+
+```bash cURL
+curl -X GET http://localhost:8080/api/compras/1 \
+  -H "Authorization: Bearer <token>"
+```
+
+---
+
+## POST /api/compras
+
+Create a new purchase order. The order is saved immediately with state `PENDIENTE`. Stock is **not** modified at this stage — it is only incremented when the order is confirmed as received via `PATCH /api/compras/{id}/recibir`.
+
+**`POST http://localhost:8080/api/compras`**
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token — requires `ADMIN` or `ALMACENERO` role.
+</ParamField>
+
+### Request Body
+
+<ParamField body="proveedorId" type="Long" required>
+  ID of the supplier for this order.
+</ParamField>
+
+<ParamField body="observaciones" type="string">
+  Optional notes (e.g. urgency, contact instructions).
+</ParamField>
+
+<ParamField body="fechaEsperada" type="string">
+  Expected delivery date in `YYYY-MM-DD` format (e.g. `"2024-01-25"`). Optional.
+</ParamField>
+
+<ParamField body="detalles" type="array" required>
+  Line items. Must contain **at least one** item (`@NotEmpty`).
+
+  <Expandable title="detalles[] fields">
+    <ParamField body="detalles[].productoId" type="Long" required>
+      ID of the product being ordered.
+    </ParamField>
+
+    <ParamField body="detalles[].cantidad" type="Integer" required>
+      Units to order. Minimum: `1`.
+    </ParamField>
+
+    <ParamField body="detalles[].precioUnitario" type="BigDecimal" required>
+      Agreed unit purchase price. Must be `>= 0.0`.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<Note>
+  The server computes `subtotal`, `igv` (18%), and `total` automatically from the provided line items. The `numeroCompra` is auto-generated using the pattern `C-{year}-{sequence}`.
+</Note>
+
+### Response `200 OK`
+
+Returns the persisted `Compra` object with `"estado": "PENDIENTE"` and the auto-generated `numeroCompra`.
+
+### Error Codes
+
+| Status | Meaning |
+|--------|---------|
+| `400 Bad Request` | Validation failure (missing required fields). |
+| `401 Unauthorized` | Token missing or invalid. |
+| `403 Forbidden` | User does not have `ADMIN` or `ALMACENERO` role. |
+| `404 Not Found` | `proveedorId` or any `productoId` does not exist. |
+
+```bash cURL — Create purchase order
+curl -X POST http://localhost:8080/api/compras \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "proveedorId": 1,
+    "observaciones": "Pedido mensual de reposición",
+    "fechaEsperada": "2024-01-25",
+    "detalles": [
+      {
+        "productoId": 1,
+        "cantidad": 5,
+        "precioUnitario": 2500.00
+      },
+      {
+        "productoId": 2,
+        "cantidad": 20,
+        "precioUnitario": 45.00
+      }
+    ]
+  }'
+```
+
+```json Response — 200 OK
+{
+  "id": 3,
+  "numeroCompra": "CMP-00003",
+  "estado": "PENDIENTE",
+  "subtotal": 13450.00,
+  "igv": 2421.00,
+  "total": 15871.00,
+  "observaciones": "Pedido mensual de reposición",
+  "proveedor": {
+    "id": 1,
+    "razonSocial": "Distribuidora Tech SAC",
+    "ruc": "20123456789"
+  },
+  "usuario": {
+    "id": 1,
+    "nombre": "Juan",
+    "apellido": "Pérez"
+  },
+  "fechaCompra": "2024-01-15T09:05:22",
+  "fechaEsperada": "2024-01-25"
+}
+```
+
+---
+
+## PATCH /api/compras/\{id\}/recibir
+
+Mark a purchase order as received. This transition is only allowed from `PENDIENTE` state. On success, the service:
+1. Increments `stockActual` for each ordered product.
+2. Creates an `Inventario` **ENTRADA** movement per line item, referencing this `compraId`.
+3. Transitions the order state to `RECIBIDA`.
+
+**`PATCH http://localhost:8080/api/compras/{id}/recibir`**
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token — requires `ADMIN` or `ALMACENERO` role.
+</ParamField>
+
+### Path Parameters
+
+<ParamField path="id" type="Long" required>
+  ID of the purchase order to receive.
+</ParamField>
+
+### Response `200 OK`
+
+Returns the updated `Compra` object with `"estado": "RECIBIDA"`.
+
+### Purchase Order State Machine
+
+| From | To | Trigger |
+|------|----|---------|
+| `PENDIENTE` | `RECIBIDA` | `PATCH /recibir` |
+| `PENDIENTE` | `ANULADA` | Manual cancellation (future) |
+| `RECIBIDA` | — | Terminal state |
+| `ANULADA` | — | Terminal state |
+| `PARCIAL` | `RECIBIDA` | Future partial-receipt flow |
+
+<Tip>
+  If you need to track partial receipts, use `estado: PARCIAL` in your business logic. The current API marks all lines as fully received in one operation.
+</Tip>
+
+### Error Codes
+
+| Status | Meaning |
+|--------|---------|
+| `400 Bad Request` | Order is not in `PENDIENTE` state (already received or cancelled). |
+| `401 Unauthorized` | Token missing or invalid. |
+| `403 Forbidden` | User does not have `ADMIN` or `ALMACENERO` role. |
+| `404 Not Found` | Purchase ID does not exist. |
+
+```json 400 — Already received
+{
+  "timestamp": "2024-01-15T10:30:00",
+  "status": 400,
+  "error": "Solo se pueden recibir compras PENDIENTES"
+}
+```
+
+```bash cURL
+curl -X PATCH http://localhost:8080/api/compras/3/recibir \
+  -H "Authorization: Bearer <token>"
+```
+
+```json Response — 200 OK
+{
+  "id": 3,
+  "numeroCompra": "CMP-00003",
+  "estado": "RECIBIDA",
+  "subtotal": 13450.00,
+  "igv": 2421.00,
+  "total": 15871.00,
+  "observaciones": "Pedido mensual de reposición",
+  "proveedor": {
+    "id": 1,
+    "razonSocial": "Distribuidora Tech SAC",
+    "ruc": "20123456789"
+  },
+  "usuario": {
+    "id": 1,
+    "nombre": "Juan",
+    "apellido": "Pérez"
+  },
+  "fechaCompra": "2024-01-15T09:05:22",
+  "fechaEsperada": "2024-01-25"
+}
+```

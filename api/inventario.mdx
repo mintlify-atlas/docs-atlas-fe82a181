@@ -1,0 +1,220 @@
+---
+title: "Inventory Movements API — Stock Audit Trail"
+sidebarTitle: "Inventario"
+description: "Consulta movimientos de inventario en /api/inventario. Registra ENTRADA, SALIDA y AJUSTE con usuario responsable, fecha y referencia a venta o compra."
+---
+
+The Inventario module is a **read-only ledger** that records every change to product stock in Tiendas Mi Cholo. Movements are created automatically by the system — a `SALIDA` is written each time a sale is registered (or reversed when a sale is voided), and an `ENTRADA` is written each time a purchase order is received. This audit trail lets you trace every unit in and out of the warehouse, who performed the operation, and which transaction triggered it. All authenticated roles can query inventory movements; no role may create or modify movements directly through the API.
+
+---
+
+## GET /api/inventario
+
+List all inventory movements across all products, in default database order.
+
+**`GET http://localhost:8080/api/inventario`**
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token — `Authorization: Bearer <token>`
+</ParamField>
+
+### Response `200 OK`
+
+<ResponseField name="id" type="Long">
+  Internal identifier of the movement record.
+</ResponseField>
+
+<ResponseField name="tipo" type="string">
+  Movement direction: `ENTRADA` (stock in), `SALIDA` (stock out), or `AJUSTE` (manual adjustment).
+</ResponseField>
+
+<ResponseField name="cantidad" type="Integer">
+  Number of units moved in this event.
+</ResponseField>
+
+<ResponseField name="stockAnterior" type="Integer">
+  Product's `stockActual` value **before** this movement was applied.
+</ResponseField>
+
+<ResponseField name="stockNuevo" type="Integer">
+  Product's `stockActual` value **after** this movement was applied.
+</ResponseField>
+
+<ResponseField name="motivo" type="string">
+  Human-readable description of why the movement occurred (e.g. `"Venta VNT-00001"` or `"Recepción compra CMP-00003"`).
+</ResponseField>
+
+<ResponseField name="referenciaId" type="Long">
+  Primary key of the source transaction (Venta ID or Compra ID) that triggered this movement.
+</ResponseField>
+
+<ResponseField name="referenciaTipo" type="string">
+  Source transaction type: `VENTA`, `COMPRA`, or `AJUSTE`.
+</ResponseField>
+
+<ResponseField name="producto" type="object">
+  Embedded product snapshot: `id`, `codigo`, `nombre`.
+</ResponseField>
+
+<ResponseField name="usuario" type="object">
+  Embedded user who triggered the operation: `id`, `nombre`, `apellido`.
+</ResponseField>
+
+<ResponseField name="fecha" type="string (ISO 8601)">
+  Timestamp when the movement was persisted (`@PrePersist`).
+</ResponseField>
+
+```json Example response
+[
+  {
+    "id": 1,
+    "tipo": "SALIDA",
+    "cantidad": 1,
+    "stockAnterior": 11,
+    "stockNuevo": 10,
+    "motivo": "Venta VNT-00001",
+    "referenciaId": 1,
+    "referenciaTipo": "VENTA",
+    "producto": {
+      "id": 1,
+      "codigo": "PROD-001",
+      "nombre": "Laptop HP 15"
+    },
+    "usuario": {
+      "id": 2,
+      "nombre": "Luis",
+      "apellido": "Mendoza"
+    },
+    "fecha": "2024-01-15T14:30:00"
+  },
+  {
+    "id": 2,
+    "tipo": "ENTRADA",
+    "cantidad": 5,
+    "stockAnterior": 10,
+    "stockNuevo": 15,
+    "motivo": "Recepción compra CMP-00003",
+    "referenciaId": 3,
+    "referenciaTipo": "COMPRA",
+    "producto": {
+      "id": 1,
+      "codigo": "PROD-001",
+      "nombre": "Laptop HP 15"
+    },
+    "usuario": {
+      "id": 1,
+      "nombre": "Juan",
+      "apellido": "Pérez"
+    },
+    "fecha": "2024-01-16T09:10:44"
+  }
+]
+```
+
+```bash cURL
+curl -X GET http://localhost:8080/api/inventario \
+  -H "Authorization: Bearer <token>"
+```
+
+---
+
+## GET /api/inventario/producto/\{productoId\}
+
+Retrieve the complete movement history for a specific product, ordered by `fecha` descending (most recent first). Use this endpoint to audit stock changes for an individual SKU.
+
+**`GET http://localhost:8080/api/inventario/producto/{productoId}`**
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token — `Authorization: Bearer <token>`
+</ParamField>
+
+### Path Parameters
+
+<ParamField path="productoId" type="Long" required>
+  The internal ID of the product whose movement history you want to retrieve.
+</ParamField>
+
+### Response `200 OK`
+
+Returns an array of movement objects (same shape as `GET /api/inventario`) ordered by `fecha DESC`. Returns an empty array `[]` if no movements exist for the given product ID.
+
+```json Example response — product 1 history
+[
+  {
+    "id": 8,
+    "tipo": "ENTRADA",
+    "cantidad": 5,
+    "stockAnterior": 10,
+    "stockNuevo": 15,
+    "motivo": "Recepción compra CMP-00003",
+    "referenciaId": 3,
+    "referenciaTipo": "COMPRA",
+    "producto": {
+      "id": 1,
+      "codigo": "PROD-001",
+      "nombre": "Laptop HP 15"
+    },
+    "usuario": {
+      "id": 1,
+      "nombre": "Juan",
+      "apellido": "Pérez"
+    },
+    "fecha": "2024-01-16T09:10:44"
+  },
+  {
+    "id": 1,
+    "tipo": "SALIDA",
+    "cantidad": 1,
+    "stockAnterior": 11,
+    "stockNuevo": 10,
+    "motivo": "Venta VNT-00001",
+    "referenciaId": 1,
+    "referenciaTipo": "VENTA",
+    "producto": {
+      "id": 1,
+      "codigo": "PROD-001",
+      "nombre": "Laptop HP 15"
+    },
+    "usuario": {
+      "id": 2,
+      "nombre": "Luis",
+      "apellido": "Mendoza"
+    },
+    "fecha": "2024-01-15T14:30:00"
+  }
+]
+```
+
+```bash cURL
+curl -X GET http://localhost:8080/api/inventario/producto/1 \
+  -H "Authorization: Bearer <token>"
+```
+
+### Error Codes
+
+| Status | Meaning |
+|--------|---------|
+| `401 Unauthorized` | Token missing, invalid, or expired. |
+
+---
+
+## How Movements Are Created
+
+<Note>
+  Inventory movements are **created automatically by the system** in response to transactional events. You cannot POST, PUT, or DELETE movements through the API — the `/api/inventario` endpoints are intentionally read-only.
+
+  | Event | Movement Type | Triggered by |
+  |-------|---------------|-------------|
+  | `POST /api/ventas` | `SALIDA` per line item | `VentaService.registrarVenta()` |
+  | `PATCH /api/ventas/{id}/anular` | `ENTRADA` per line item (reversal) | `VentaService.anularVenta()` |
+  | `PATCH /api/compras/{id}/recibir` | `ENTRADA` per line item | `CompraService.recibirCompra()` |
+  | Manual adjustment | `AJUSTE` | Future back-office flow |
+</Note>
+
+<Note>
+  The `referenciaTipo` field tells you **what kind of transaction** triggered the movement, and `referenciaId` gives you its primary key so you can cross-reference with `/api/ventas/{id}` or `/api/compras/{id}` for the full context.
+</Note>

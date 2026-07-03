@@ -1,0 +1,184 @@
+---
+title: "Deploy Tiendas Mi Cholo with Docker Compose"
+sidebarTitle: "Docker Compose"
+description: "Levanta MySQL 8 y phpMyAdmin con un solo comando usando el docker-compose.yml incluido. El schema y datos iniciales se cargan automáticamente."
+---
+
+El repositorio incluye un archivo `docker-compose.yml` listo para usar que levanta **MySQL 8** y **phpMyAdmin** con un solo comando. Al iniciar por primera vez, Docker inyecta automáticamente los scripts `database/schema.sql` y `database/data.sql`, creando todas las tablas y cargando los datos iniciales (roles, usuarios de prueba, categorías y productos) sin ninguna intervención manual. Esta es la forma recomendada de preparar la base de datos en entornos de desarrollo.
+
+## Archivo docker-compose.yml
+
+El siguiente es el contenido completo del archivo de orquestación tal como está en el repositorio:
+
+```yaml
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: tienda-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: tienda123
+      MYSQL_DATABASE: tienda_db
+      MYSQL_USER: tienda_user
+      MYSQL_PASSWORD: tienda123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./database/data.sql:/docker-entrypoint-initdb.d/02-data.sql
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-authentication-plugin=mysql_native_password
+    networks:
+      - tienda-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ptienda123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: tienda-phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: tienda123
+    ports:
+      - "8081:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - tienda-network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  tienda-network:
+    driver: bridge
+```
+
+## ¿Qué levanta el Compose?
+
+<CardGroup cols={2}>
+  <Card title="tienda-mysql" icon="database">
+    Contenedor MySQL 8.0 accesible en `localhost:3306`. Crea la base de datos `tienda_db` con el usuario `tienda_user` / `tienda123` y el usuario root `root` / `tienda123`. El volumen `mysql_data` persiste los datos entre reinicios.
+  </Card>
+  <Card title="tienda-phpmyadmin" icon="table">
+    Panel web de administración phpMyAdmin expuesto en el puerto `8081`. Arranca solo después de que el healthcheck de MySQL sea exitoso gracias a `depends_on: condition: service_healthy`.
+  </Card>
+</CardGroup>
+
+### Inicialización automática de datos
+
+Al crear el contenedor por **primera vez**, MySQL ejecuta los scripts montados en `/docker-entrypoint-initdb.d/` en orden numérico:
+
+| Orden | Archivo | Contenido |
+|---|---|---|
+| `01` | `database/schema.sql` | Crea tablas, claves primarias, foráneas e índices |
+| `02` | `database/data.sql` | Inserta roles, usuarios de prueba, categorías y productos iniciales |
+
+<Note>
+  Los scripts de inicialización **solo se ejecutan una vez**, cuando el volumen `mysql_data` está vacío (primera ejecución). Si el volumen ya existe, Docker omite los scripts aunque hayas modificado los archivos SQL.
+</Note>
+
+## Cómo iniciar los servicios
+
+<Steps>
+  <Step title="Posiciónate en la raíz del proyecto">
+    Abre una terminal y navega al directorio raíz del repositorio, donde se encuentra el archivo `docker-compose.yml`.
+
+    ```bash
+    cd Miercoles-Proyecto
+    ```
+  </Step>
+  <Step title="Levanta los contenedores en segundo plano">
+    Ejecuta el siguiente comando para iniciar MySQL y phpMyAdmin de forma desacoplada:
+
+    ```bash
+    docker-compose up -d
+    ```
+
+    Docker descargará las imágenes `mysql:8.0` y `phpmyadmin:latest` si no las tienes localmente, creará la red `tienda-network` y el volumen `mysql_data`, y arrancará ambos contenedores.
+  </Step>
+  <Step title="Espera a que el healthcheck de MySQL pase">
+    El contenedor `tienda-phpmyadmin` no arrancará hasta que MySQL responda correctamente al healthcheck (`mysqladmin ping`). Puedes verificar el estado en tiempo real con:
+
+    ```bash
+    docker-compose ps
+    ```
+
+    Espera hasta que el campo `Status` de `tienda-mysql` muestre `healthy`. El healthcheck se evalúa cada **10 segundos** con un máximo de **5 reintentos** (timeout de 5s cada uno).
+  </Step>
+  <Step title="Accede a phpMyAdmin">
+    Una vez que ambos contenedores estén en ejecución, abre tu navegador y visita:
+
+    ```
+    http://localhost:8081
+    ```
+
+    Inicia sesión con las credenciales:
+    - **Usuario:** `root`
+    - **Contraseña:** `tienda123`
+  </Step>
+  <Step title="Verifica la base de datos">
+    En el panel izquierdo de phpMyAdmin confirma que la base de datos `tienda_db` existe y que contiene todas las tablas creadas por `schema.sql`. Si las tablas están vacías o faltan, revisa los logs de inicialización:
+
+    ```bash
+    docker logs tienda-mysql
+    ```
+  </Step>
+</Steps>
+
+## Cadena de conexión del backend
+
+El backend Spring Boot se conecta a MySQL usando la siguiente JDBC URL configurada en `application.properties`:
+
+```
+jdbc:mysql://localhost:3306/tienda_db?useSSL=false&serverTimezone=America/Lima&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
+```
+
+| Parámetro | Valor | Descripción |
+|---|---|---|
+| `host` | `localhost` | MySQL expuesto directamente al host en el puerto 3306 |
+| `database` | `tienda_db` | Base de datos creada por el Compose |
+| `useSSL` | `false` | Sin cifrado TLS (entorno local) |
+| `serverTimezone` | `America/Lima` | Zona horaria para conversión de fechas |
+| `allowPublicKeyRetrieval` | `true` | Necesario para `mysql_native_password` con connectors recientes |
+| `characterEncoding` | `UTF-8` | Codificación de caracteres en la conexión JDBC |
+
+<Note>
+  El servidor MySQL arranca con `--character-set-server=utf8mb4` y `--collation-server=utf8mb4_unicode_ci`, lo que garantiza soporte completo para caracteres especiales, emojis y texto en español (tildes, ñ) tanto en el almacenamiento como en la conexión.
+</Note>
+
+## Gestión y limpieza
+
+Para **detener** los contenedores sin borrar los datos:
+
+```bash
+docker-compose stop
+```
+
+Para **detener y eliminar** los contenedores pero conservar el volumen de datos:
+
+```bash
+docker-compose down
+```
+
+<Warning>
+  El comando `docker-compose down -v` **elimina el volumen `mysql_data`** junto con todos los datos almacenados en la base de datos. Úsalo solo si quieres resetear completamente el entorno y recargar los datos desde los scripts SQL iniciales. Esta operación es **irreversible**.
+
+  ```bash
+  # ⚠️ Borra todos los datos de la base de datos
+  docker-compose down -v
+  ```
+</Warning>

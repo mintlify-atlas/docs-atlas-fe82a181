@@ -1,0 +1,198 @@
+---
+title: "Configuración de Backend y Variables de Entorno"
+sidebarTitle: "Configuración"
+description: "Referencia completa de application.properties: base de datos, JWT, CORS, logging, multipart y pool de conexiones HikariCP."
+---
+
+Toda la configuración del backend Spring Boot de **Tiendas Mi Cholo** se centraliza en el archivo `backend/src/main/resources/application.properties`. Este archivo controla desde la conexión a MySQL y el pool de conexiones HikariCP hasta los parámetros del sistema de autenticación JWT, las políticas de CORS para el frontend Angular, los niveles de logging y los límites de carga de archivos. Antes de arrancar el backend por primera vez, revisa cada sección para adaptarla a tu entorno.
+
+## Archivo application.properties completo
+
+El siguiente es el contenido exacto del archivo de configuración tal como se encuentra en el repositorio:
+
+```properties
+# ============================================================
+#  SPRING BOOT — Configuración de la Aplicación
+# ============================================================
+
+spring.application.name=tienda-backend
+
+# ------------------------------------------------------------
+# Base de Datos — MySQL (Docker)
+# ------------------------------------------------------------
+spring.datasource.url=jdbc:mysql://localhost:3306/tienda_db?useSSL=false&serverTimezone=America/Lima&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
+spring.datasource.username=tienda_user
+spring.datasource.password=tienda123
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# Pool de conexiones HikariCP
+spring.datasource.hikari.maximum-pool-size=10
+spring.datasource.hikari.minimum-idle=2
+spring.datasource.hikari.connection-timeout=30000
+
+# ------------------------------------------------------------
+# JPA / Hibernate
+# ------------------------------------------------------------
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.show-sql=false
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL8Dialect
+spring.jpa.properties.hibernate.format_sql=true
+spring.jpa.properties.hibernate.use_sql_comments=false
+spring.jpa.open-in-view=false
+
+# ------------------------------------------------------------
+# JWT
+# ------------------------------------------------------------
+app.jwt.secret=TiendaJwtSecretKey2024SuperSecureBase64EncodedStringForHS256Algorithm
+app.jwt.expiration=86400000
+app.jwt.refresh-expiration=604800000
+
+# ------------------------------------------------------------
+# Servidor
+# ------------------------------------------------------------
+server.port=8080
+server.servlet.context-path=/api
+
+# ------------------------------------------------------------
+# CORS (permite peticiones desde Angular en desarrollo)
+# ------------------------------------------------------------
+app.cors.allowed-origins=http://localhost:4200
+
+# ------------------------------------------------------------
+# Logging
+# ------------------------------------------------------------
+logging.level.com.tienda=DEBUG
+logging.level.org.springframework.security=INFO
+logging.level.org.hibernate.SQL=ERROR
+
+# ------------------------------------------------------------
+# Archivos multimedia (imágenes de productos)
+# ------------------------------------------------------------
+spring.servlet.multipart.max-file-size=5MB
+spring.servlet.multipart.max-request-size=10MB
+app.upload.dir=uploads/productos
+```
+
+## Referencia de secciones de configuración
+
+### Base de datos y HikariCP
+
+| Propiedad | Valor por defecto | Descripción |
+|---|---|---|
+| `spring.datasource.url` | `jdbc:mysql://localhost:3306/tienda_db?...` | URL JDBC completa con parámetros de zona horaria, encoding y SSL |
+| `spring.datasource.username` | `tienda_user` | Usuario de la base de datos creado por Docker Compose |
+| `spring.datasource.password` | `tienda123` | Contraseña del usuario de base de datos |
+| `spring.datasource.driver-class-name` | `com.mysql.cj.jdbc.Driver` | Driver JDBC para MySQL 8 (conector `mysql-connector-j`) |
+| `hikari.maximum-pool-size` | `10` | Máximo de conexiones simultáneas en el pool |
+| `hikari.minimum-idle` | `2` | Conexiones mínimas mantenidas abiertas en reposo |
+| `hikari.connection-timeout` | `30000` (ms) | Tiempo máximo de espera para obtener una conexión del pool (30s) |
+
+### JPA / Hibernate
+
+| Propiedad | Valor | Descripción |
+|---|---|---|
+| `spring.jpa.hibernate.ddl-auto` | `validate` | Hibernate **valida** el esquema contra las entidades pero no lo modifica |
+| `spring.jpa.show-sql` | `false` | Las sentencias SQL no se imprimen en consola (control vía logging) |
+| `hibernate.dialect` | `MySQL8Dialect` | Dialecto optimizado para MySQL 8, habilita features específicas del motor |
+| `spring.jpa.open-in-view` | `false` | Desactiva el antipatrón Open Session in View para mejor rendimiento |
+
+<Note>
+  Con `spring.jpa.hibernate.ddl-auto=validate`, Hibernate **no crea ni altera tablas**. El esquema de la base de datos debe existir antes de arrancar la aplicación. Usa el script `database/schema.sql` para crearlo (ya sea manualmente o dejando que Docker Compose lo inyecte automáticamente en el primer arranque).
+</Note>
+
+### JWT (autenticación)
+
+| Propiedad | Valor por defecto | Descripción |
+|---|---|---|
+| `app.jwt.secret` | `TiendaJwtSecretKey2024...` | Clave secreta HMAC-SHA256 usada para firmar y verificar los tokens |
+| `app.jwt.expiration` | `86400000` (ms) | Duración del access token: **24 horas** |
+| `app.jwt.refresh-expiration` | `604800000` (ms) | Duración del refresh token: **7 días** |
+
+El sistema soporta tres roles: `ADMIN`, `VENDEDOR` y `ALMACENERO`. Los tokens incluyen el rol del usuario en sus claims para que Spring Security pueda aplicar las reglas de autorización en cada endpoint.
+
+<Warning>
+  **Cambia `app.jwt.secret` antes de desplegar en producción.** El valor por defecto es público y conocido. Usa un generador de claves aleatorias para producir una cadena segura de al menos 64 caracteres codificada en Base64. Una clave comprometida permite que cualquier atacante forje tokens JWT válidos para cualquier rol.
+
+  ```bash
+  # Genera una clave segura de 64 bytes en Base64
+  openssl rand -base64 64
+  ```
+</Warning>
+
+### Servidor
+
+| Propiedad | Valor | Descripción |
+|---|---|---|
+| `server.port` | `8080` | Puerto en el que escucha el servidor Tomcat embebido |
+| `server.servlet.context-path` | `/api` | Prefijo global de todos los endpoints (ej: `http://localhost:8080/api/productos`) |
+
+### CORS
+
+| Propiedad | Valor | Descripción |
+|---|---|---|
+| `app.cors.allowed-origins` | `http://localhost:4200` | Origen(s) permitidos para peticiones cross-origin; apunta al servidor de desarrollo Angular |
+
+En producción, reemplaza este valor con la URL real del frontend desplegado (ej: `https://mitienda.com`). Puedes especificar múltiples orígenes separados por coma si tu configuración CORS lo soporta.
+
+### Logging
+
+| Propiedad | Nivel | Descripción |
+|---|---|---|
+| `logging.level.com.tienda` | `DEBUG` | Logs detallados de todo el código de aplicación del paquete `com.tienda` |
+| `logging.level.org.springframework.security` | `INFO` | Eventos de seguridad (autenticación, autorización) sin verbosidad excesiva |
+| `logging.level.org.hibernate.SQL` | `ERROR` | Suprime las sentencias SQL de Hibernate en consola; solo muestra errores |
+
+### Carga de archivos (multipart)
+
+| Propiedad | Valor | Descripción |
+|---|---|---|
+| `spring.servlet.multipart.max-file-size` | `5MB` | Tamaño máximo por archivo individual subido (imágenes de productos) |
+| `spring.servlet.multipart.max-request-size` | `10MB` | Tamaño máximo total de una petición multipart |
+| `app.upload.dir` | `uploads/productos` | Directorio relativo a la raíz del proceso donde se almacenan las imágenes |
+
+## Configuración del frontend Angular
+
+El frontend Angular se conecta al backend a través de la constante `API_URL` definida en `core/config/api.config.ts`. Por defecto apunta al servidor de desarrollo local:
+
+```typescript
+// Frontend/src/app/core/config/api.config.ts
+export const API_URL = 'http://localhost:8080/api';
+```
+
+Todos los servicios HTTP del frontend construyen sus URLs concatenando `API_URL` con el path del recurso (ej: `${API_URL}/productos`, `${API_URL}/auth/login`).
+
+## Sobreescribir propiedades para producción
+
+Spring Boot permite sobreescribir cualquier propiedad de `application.properties` mediante **variables de entorno** o un archivo `application-prod.properties` activado por perfil. Esto es ideal para no hardcodear credenciales sensibles en el código fuente.
+
+**Opción 1 — Variables de entorno** (recomendado para contenedores / CI/CD):
+
+```bash
+export SPRING_DATASOURCE_URL=jdbc:mysql://prod-db-host:3306/tienda_db?useSSL=true&serverTimezone=America/Lima
+export SPRING_DATASOURCE_USERNAME=tienda_prod_user
+export SPRING_DATASOURCE_PASSWORD=SuperSecretProdPassword
+export APP_JWT_SECRET=$(openssl rand -base64 64)
+export APP_CORS_ALLOWED_ORIGINS=https://mitienda.com
+```
+
+**Opción 2 — Perfil de producción** (`application-prod.properties`):
+
+```bash
+# Activa el perfil "prod" al arrancar
+java -jar backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
+```
+
+```properties
+# backend/src/main/resources/application-prod.properties
+spring.datasource.url=jdbc:mysql://prod-db-host:3306/tienda_db?useSSL=true&serverTimezone=America/Lima
+spring.datasource.username=tienda_prod_user
+spring.datasource.password=SuperSecretProdPassword
+app.jwt.secret=<clave-generada-con-openssl>
+app.cors.allowed-origins=https://mitienda.com
+logging.level.com.tienda=WARN
+logging.level.org.springframework.security=WARN
+```
+
+<Tip>
+  Las propiedades del perfil de producción **sobreescriben** las del `application.properties` base. Solo necesitas incluir en `application-prod.properties` las propiedades que difieren del entorno de desarrollo; el resto se hereda automáticamente.
+</Tip>

@@ -1,0 +1,201 @@
+---
+title: "Reportes PDF de Ventas e Inventario"
+sidebarTitle: "Reportes"
+description: "Genera y descarga reportes en PDF para ventas e inventario directamente desde la API. Función exclusiva del rol ADMIN."
+---
+
+El módulo de Reportes permite al administrador de **Tiendas Mi Cholo** obtener instantáneas del negocio en formato PDF listo para imprimir o archivar. Los dos reportes disponibles —ventas e inventario— se generan en el servidor con todos los datos actuales y se entregan como descarga directa en la respuesta HTTP. No se almacenan en disco; cada llamada produce un PDF nuevo al vuelo.
+
+<Warning>
+  Ambos endpoints requieren el rol **ADMIN**. Cualquier token con rol `VENDEDOR` o `ALMACENERO` recibirá `403 Forbidden`. Asegúrate de incluir siempre el header `Authorization: Bearer <token>` con un token válido y no expirado.
+</Warning>
+
+---
+
+## Biblioteca de Generación PDF
+
+<Note>
+  Los reportes se generan con **iTextPDF versión 5.5.13.3** (`com.itextpdf:itextpdf:5.5.13.3`), incluida como dependencia Maven en el backend. Los documentos se producen en memoria como `byte[]` y se devuelven directamente en el cuerpo de la respuesta HTTP sin tocar el sistema de archivos del servidor.
+</Note>
+
+Detalles del diseño generado:
+
+| Elemento | Detalle |
+|----------|---------|
+| Fuente | Helvetica (familia estándar PDF) |
+| Color de encabezado de tabla | Índigo `#6366F1` |
+| Color de encabezado de documento | Slate 800 `#1E293B` |
+| Filas alternas | Slate 100 `#F1F5F9` / Blanco |
+| Orientación — Ventas | A4 horizontal (landscape) |
+| Orientación — Inventario | A4 vertical (portrait) |
+
+---
+
+## Reporte de Ventas
+
+### `GET /api/reportes/ventas`
+
+Genera el reporte con **todas las ventas registradas** en el sistema, ordenadas por número de venta.
+
+```http
+GET /api/reportes/ventas
+Authorization: Bearer <token>
+```
+
+**Cabeceras de respuesta:**
+
+| Header | Valor |
+|--------|-------|
+| `Content-Type` | `application/pdf` |
+| `Content-Disposition` | `attachment; filename=reporte-ventas.pdf` |
+
+**Columnas del reporte:**
+
+| Columna | Descripción |
+|---------|-------------|
+| `#` | Número de fila correlativo |
+| `N° Venta` | Código generado automáticamente (ej. `VNT-00001`) |
+| `Cliente` | Nombre y apellidos del cliente |
+| `Usuario` | Nombre y apellido del vendedor que registró la venta |
+| `Subtotal` | Monto antes del IGV (en soles, prefijo `S/`) |
+| `IGV` | Impuesto General a las Ventas |
+| `Total` | Monto total de la venta |
+| `Estado` | `COMPLETADA` o `ANULADA` |
+
+El pie del documento muestra el **total de ventas** registradas al momento de la generación.
+
+---
+
+## Reporte de Inventario
+
+### `GET /api/reportes/inventario`
+
+Genera el reporte con **todos los productos** del catálogo, incluyendo niveles de stock actuales versus mínimos.
+
+```http
+GET /api/reportes/inventario
+Authorization: Bearer <token>
+```
+
+**Cabeceras de respuesta:**
+
+| Header | Valor |
+|--------|-------|
+| `Content-Type` | `application/pdf` |
+| `Content-Disposition` | `attachment; filename=reporte-inventario.pdf` |
+
+**Columnas del reporte:**
+
+| Columna | Descripción |
+|---------|-------------|
+| `Código` | Código único del producto (ej. `PROD-001`) |
+| `Nombre` | Nombre del producto |
+| `Categoría` | Nombre de la categoría a la que pertenece |
+| `Stock Act.` | Stock actual disponible |
+| `Stock Mín.` | Stock mínimo configurado |
+| `P. Venta` | Precio de venta (en soles, prefijo `S/`) |
+| `Estado` | `OK` si el stock es suficiente; `STOCK BAJO` si `stockActual ≤ stockMinimo` |
+
+Las filas con **stock bajo** se resaltan automáticamente con fondo rojo claro `#FEE2E2` para facilitar la identificación visual. El pie del documento muestra el **total de productos** en el catálogo.
+
+---
+
+## Descarga desde la Terminal
+
+Puedes descargar cualquiera de los reportes directamente con `curl`:
+
+```bash
+# Reporte de ventas
+curl -H "Authorization: Bearer <token>" \
+  http://localhost:8080/api/reportes/ventas \
+  -o reporte-ventas.pdf
+
+# Reporte de inventario
+curl -H "Authorization: Bearer <token>" \
+  http://localhost:8080/api/reportes/inventario \
+  -o reporte-inventario.pdf
+```
+
+Reemplaza `<token>` por el valor del `token` obtenido al hacer login en `POST /api/auth/login`.
+
+---
+
+## Descarga desde el Frontend Angular
+
+Desde el cliente Angular 22, usa `HttpClient` con `responseType: 'blob'` para recibir el PDF y disparar la descarga en el navegador:
+
+```typescript
+import { HttpClient } from '@angular/common/http';
+import { inject } from '@angular/core';
+
+export class ReporteService {
+  private http = inject(HttpClient);
+
+  descargarReporteVentas(): void {
+    this.http
+      .get('http://localhost:8080/api/reportes/ventas', {
+        responseType: 'blob',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      })
+      .subscribe((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'reporte-ventas.pdf';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+  }
+
+  descargarReporteInventario(): void {
+    this.http
+      .get('http://localhost:8080/api/reportes/inventario', {
+        responseType: 'blob',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      })
+      .subscribe((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'reporte-inventario.pdf';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+  }
+}
+```
+
+---
+
+## Comparación de los dos Reportes
+
+<CardGroup cols={2}>
+  <Card title="Reporte de Ventas" icon="file-invoice-dollar">
+    **Endpoint:** `GET /api/reportes/ventas`
+
+    **Fuente de datos:** tabla `ventas` — incluye todas las ventas (completas y anuladas).
+
+    **Orientación:** A4 horizontal para acomodar las 8 columnas.
+
+    **Archivo:** `reporte-ventas.pdf`
+  </Card>
+  <Card title="Reporte de Inventario" icon="boxes-stacked">
+    **Endpoint:** `GET /api/reportes/inventario`
+
+    **Fuente de datos:** tabla `productos` — incluye todos los productos (activos e inactivos).
+
+    **Orientación:** A4 vertical con alertas visuales para stock bajo.
+
+    **Archivo:** `reporte-inventario.pdf`
+  </Card>
+</CardGroup>
+
+---
+
+## Respuestas de Error Comunes
+
+| Código | Causa |
+|--------|-------|
+| `401 Unauthorized` | Token JWT ausente, inválido o expirado |
+| `403 Forbidden` | El token pertenece a un rol distinto de `ADMIN` |
+| `500 Internal Server Error` | Error al generar el PDF (problema en `ReporteService`) |

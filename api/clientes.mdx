@@ -1,0 +1,319 @@
+---
+title: "Clients API — Customer Records and Search"
+sidebarTitle: "Clientes"
+description: "CRUD de clientes en /api/clientes. Soporta DNI, RUC, Pasaporte y CE como tipos de documento. Búsqueda por nombre o número de documento."
+---
+
+El módulo de clientes gestiona el registro de personas naturales y jurídicas que realizan compras en **Tiendas Mi Cholo**. Soporta cuatro tipos de documento de identidad peruanos e internacionales: `DNI`, `RUC`, `PASAPORTE` y `CE` (Carné de Extranjería). El número de documento es único en el sistema. El borrado es **lógico** (`activo = false`). Todos los roles autenticados tienen acceso completo a este módulo.
+
+<Note>
+  Todos los endpoints requieren `Authorization: Bearer <token>`. Cualquier rol autenticado (`ADMIN`, `VENDEDOR`, `ALMACENERO`) puede ejecutar operaciones de lectura y escritura.
+</Note>
+
+---
+
+## GET /api/clientes
+
+Lista todos los clientes con `activo = true`.
+
+### Ejemplo
+
+```bash
+curl -s http://localhost:8080/api/clientes \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+**Respuesta 200 OK:**
+
+```json
+[
+  {
+    "id": 1,
+    "nombres": "Carlos Alberto",
+    "apellidos": "Rodríguez Silva",
+    "tipoDoc": "DNI",
+    "nroDoc": "12345678",
+    "email": "carlos@email.com",
+    "telefono": "987654321",
+    "direccion": "Av. Principal 123, Lima",
+    "activo": true,
+    "createdAt": "2024-01-01T08:00:00",
+    "updatedAt": "2024-01-15T10:00:00"
+  }
+]
+```
+
+### Response fields
+
+<ResponseField name="id" type="integer">
+  Identificador único del cliente. Se usa como `clienteId` al registrar ventas.
+</ResponseField>
+
+<ResponseField name="nombres" type="string">
+  Nombres del cliente. Máximo 100 caracteres.
+</ResponseField>
+
+<ResponseField name="apellidos" type="string">
+  Apellidos del cliente. Máximo 100 caracteres.
+</ResponseField>
+
+<ResponseField name="tipoDoc" type="string">
+  Tipo de documento de identidad: `DNI`, `RUC`, `PASAPORTE` o `CE`.
+</ResponseField>
+
+<ResponseField name="nroDoc" type="string">
+  Número de documento. Único en el sistema. Máximo 20 caracteres.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Correo electrónico del cliente. Puede ser `null`.
+</ResponseField>
+
+<ResponseField name="telefono" type="string">
+  Teléfono de contacto. Máximo 20 caracteres. Puede ser `null`.
+</ResponseField>
+
+<ResponseField name="direccion" type="string">
+  Dirección del cliente. Máximo 300 caracteres. Puede ser `null`.
+</ResponseField>
+
+<ResponseField name="activo" type="boolean">
+  Estado del cliente. Los inactivos no aparecen en `GET /api/clientes`.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  Fecha y hora de creación (ISO 8601).
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  Fecha y hora de última modificación (ISO 8601).
+</ResponseField>
+
+---
+
+## GET /api/clientes/buscar
+
+Busca clientes activos por nombres, apellidos o número de documento.
+
+### Query parameters
+
+<ParamField query="q" type="string" required>
+  Término de búsqueda. Se aplica sobre `nombres`, `apellidos` y `nroDoc` con coincidencia parcial (LIKE).
+</ParamField>
+
+### Ejemplo
+
+```bash
+curl -s "http://localhost:8080/api/clientes/buscar?q=rodriguez" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+<Tip>
+  Usa este endpoint en el formulario de nueva venta para buscar clientes en tiempo real mientras el operador escribe el nombre o número de documento.
+</Tip>
+
+---
+
+## GET /api/clientes/\{id\}
+
+Obtiene un cliente por su ID.
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID del cliente a consultar.
+</ParamField>
+
+### Ejemplo
+
+```bash
+curl -s http://localhost:8080/api/clientes/1 \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+**Respuesta 404 Not Found:**
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00",
+  "status": 404,
+  "error": "Cliente no encontrado: 99"
+}
+```
+
+---
+
+## POST /api/clientes
+
+Registra un nuevo cliente en el sistema.
+
+### Request body
+
+<ParamField body="nombres" type="string" required>
+  Nombres del cliente. Máximo 100 caracteres.
+</ParamField>
+
+<ParamField body="apellidos" type="string" required>
+  Apellidos del cliente. Máximo 100 caracteres.
+</ParamField>
+
+<ParamField body="tipoDoc" type="string" required>
+  Tipo de documento. Valores aceptados: `DNI`, `RUC`, `PASAPORTE`, `CE`. Por defecto `DNI` si se omite.
+</ParamField>
+
+<ParamField body="nroDoc" type="string" required>
+  Número de documento único. Máximo 20 caracteres.
+</ParamField>
+
+<ParamField body="email" type="string">
+  Correo electrónico. Máximo 150 caracteres.
+</ParamField>
+
+<ParamField body="telefono" type="string">
+  Teléfono de contacto. Máximo 20 caracteres.
+</ParamField>
+
+<ParamField body="direccion" type="string">
+  Dirección del cliente. Máximo 300 caracteres.
+</ParamField>
+
+### Tipos de documento
+
+| Valor | Descripción |
+|-------|-------------|
+| `DNI` | Documento Nacional de Identidad (8 dígitos) |
+| `RUC` | Registro Único de Contribuyentes (11 dígitos) |
+| `PASAPORTE` | Pasaporte internacional |
+| `CE` | Carné de Extranjería |
+
+### Ejemplo
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl -s -X POST http://localhost:8080/api/clientes \
+      -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+      -H "Content-Type: application/json" \
+      -d '{
+        "nombres": "Ana Lucía",
+        "apellidos": "Torres Mendoza",
+        "tipoDoc": "DNI",
+        "nroDoc": "87654321",
+        "email": "ana.torres@email.com",
+        "telefono": "912345678",
+        "direccion": "Jr. Los Olivos 456, Miraflores, Lima"
+      }'
+    ```
+  </Tab>
+  <Tab title="Request JSON">
+    ```json
+    {
+      "nombres": "Ana Lucía",
+      "apellidos": "Torres Mendoza",
+      "tipoDoc": "DNI",
+      "nroDoc": "87654321",
+      "email": "ana.torres@email.com",
+      "telefono": "912345678",
+      "direccion": "Jr. Los Olivos 456, Miraflores, Lima"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+**Respuesta 200 OK:**
+
+```json
+{
+  "id": 5,
+  "nombres": "Ana Lucía",
+  "apellidos": "Torres Mendoza",
+  "tipoDoc": "DNI",
+  "nroDoc": "87654321",
+  "email": "ana.torres@email.com",
+  "telefono": "912345678",
+  "direccion": "Jr. Los Olivos 456, Miraflores, Lima",
+  "activo": true,
+  "createdAt": "2024-01-15T14:00:00",
+  "updatedAt": "2024-01-15T14:00:00"
+}
+```
+
+---
+
+## PUT /api/clientes/\{id\}
+
+Actualiza los datos de un cliente existente.
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID del cliente a actualizar.
+</ParamField>
+
+### Request body
+
+Mismos campos que `POST /api/clientes`. Todos los campos provistos sobreescriben los existentes.
+
+### Ejemplo
+
+```bash
+curl -s -X PUT http://localhost:8080/api/clientes/5 \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombres": "Ana Lucía",
+    "apellidos": "Torres Mendoza de Quispe",
+    "tipoDoc": "DNI",
+    "nroDoc": "87654321",
+    "email": "anatorres@nuevoemail.com",
+    "telefono": "999111222",
+    "direccion": "Calle Nueva 789, San Borja, Lima"
+  }'
+```
+
+**Respuesta 200 OK** — retorna el cliente actualizado.
+
+---
+
+## DELETE /api/clientes/\{id\}
+
+Desactiva un cliente (borrado lógico — `activo = false`). El historial de ventas asociado se conserva.
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID del cliente a desactivar.
+</ParamField>
+
+### Ejemplo
+
+```bash
+curl -s -X DELETE http://localhost:8080/api/clientes/5 \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+**Respuesta:** `204 No Content` (sin cuerpo).
+
+<Warning>
+  Desactivar un cliente no elimina sus ventas históricas. Los registros de ventas asociados se conservan intactos para efectos de auditoría y reportes.
+</Warning>
+
+---
+
+## Códigos de error
+
+| Código | Descripción | Causa habitual |
+|--------|-------------|----------------|
+| `400 Bad Request` | Validación fallida | Campos requeridos vacíos, `nroDoc` duplicado, `tipoDoc` inválido |
+| `401 Unauthorized` | No autenticado | Token ausente, inválido o expirado |
+| `404 Not Found` | Cliente no encontrado | El `id` no existe en la base de datos |
+
+**Respuesta 400 (nroDoc duplicado):**
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00",
+  "status": 400,
+  "error": "Duplicate entry '87654321' for key 'clientes.nro_doc'"
+}
+```

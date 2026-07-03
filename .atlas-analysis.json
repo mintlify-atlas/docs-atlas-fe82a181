@@ -1,0 +1,147 @@
+{
+  "projectType": "saas",
+  "projectName": "Tiendas Mi Cholo",
+  "projectDescription": "A full-stack retail management system (Angular + Spring Boot) for managing sales, purchases, inventory, products, clients, and suppliers with JWT-based role authentication.",
+  "theme": "almond",
+  "primaryColor": "#f10d5b",
+  "lightColor": null,
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guía de Usuario",
+        "groups": [
+          {
+            "group": "Primeros Pasos",
+            "pages": [
+              "introduccion",
+              "inicio-rapido",
+              "autenticacion"
+            ]
+          },
+          {
+            "group": "Módulos Principales",
+            "pages": [
+              "modulos/dashboard",
+              "modulos/productos",
+              "modulos/ventas",
+              "modulos/compras",
+              "modulos/inventario"
+            ]
+          },
+          {
+            "group": "Administración",
+            "pages": [
+              "admin/usuarios",
+              "admin/clientes",
+              "admin/proveedores",
+              "admin/categorias",
+              "admin/reportes"
+            ]
+          },
+          {
+            "group": "Despliegue",
+            "pages": [
+              "despliegue/requisitos",
+              "despliegue/docker",
+              "despliegue/configuracion"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Autenticación",
+            "pages": [
+              "api/auth"
+            ]
+          },
+          {
+            "group": "Recursos",
+            "pages": [
+              "api/usuarios",
+              "api/roles",
+              "api/categorias",
+              "api/productos",
+              "api/clientes",
+              "api/proveedores"
+            ]
+          },
+          {
+            "group": "Operaciones Comerciales",
+            "pages": [
+              "api/ventas",
+              "api/compras",
+              "api/inventario"
+            ]
+          },
+          {
+            "group": "Analítica",
+            "pages": [
+              "api/dashboard",
+              "api/reportes"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "JWT authentication with access (24h) and refresh (7d) tokens",
+    "Role-based access control: ADMIN, VENDEDOR, ALMACENERO",
+    "Product catalog with stock tracking and low-stock alerts",
+    "Sales registration with automatic stock deduction and IGV calculation",
+    "Purchase order management with receive workflow and stock increment",
+    "Inventory movement audit trail (ENTRADA, SALIDA, AJUSTE)",
+    "Dashboard with real-time KPIs (daily sales, monthly totals, pending purchases)",
+    "PDF report generation for sales and inventory (iTextPDF)",
+    "Bulk product import via CSV/JSON with upsert logic",
+    "Angular 22 SSR frontend with lazy-loaded feature modules",
+    "Docker Compose setup with MySQL 8 and phpMyAdmin",
+    "CORS pre-configured for Angular dev server (localhost:4200)"
+  ],
+  "publicApiSurface": [
+    "POST /api/auth/login",
+    "GET /api/usuarios",
+    "POST /api/usuarios",
+    "PUT /api/usuarios/{id}",
+    "DELETE /api/usuarios/{id}",
+    "GET /api/roles",
+    "GET /api/categorias",
+    "POST /api/categorias",
+    "PUT /api/categorias/{id}",
+    "DELETE /api/categorias/{id}",
+    "GET /api/productos",
+    "GET /api/productos/buscar?q=",
+    "GET /api/productos/stock-bajo",
+    "POST /api/productos",
+    "PUT /api/productos/{id}",
+    "DELETE /api/productos/{id}",
+    "POST /api/productos/importar",
+    "GET /api/clientes",
+    "GET /api/clientes/buscar?q=",
+    "POST /api/clientes",
+    "PUT /api/clientes/{id}",
+    "DELETE /api/clientes/{id}",
+    "GET /api/proveedores",
+    "GET /api/proveedores/buscar?q=",
+    "POST /api/proveedores",
+    "PUT /api/proveedores/{id}",
+    "DELETE /api/proveedores/{id}",
+    "GET /api/ventas",
+    "GET /api/ventas/{id}",
+    "POST /api/ventas",
+    "PATCH /api/ventas/{id}/anular",
+    "GET /api/compras",
+    "GET /api/compras/{id}",
+    "POST /api/compras",
+    "PATCH /api/compras/{id}/recibir",
+    "GET /api/inventario",
+    "GET /api/inventario/producto/{productoId}",
+    "GET /api/dashboard/stats",
+    "GET /api/reportes/ventas",
+    "GET /api/reportes/inventario"
+  ]
+}

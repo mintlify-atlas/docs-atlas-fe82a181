@@ -1,0 +1,110 @@
+---
+title: "Roles API — List Available System Roles"
+sidebarTitle: "Roles"
+description: "GET /api/roles lista los tres roles disponibles: ADMIN, VENDEDOR y ALMACENERO con su descripción. Accesible para cualquier usuario autenticado."
+---
+
+El módulo de roles expone los tres perfiles de acceso del sistema **Tiendas Mi Cholo**. Los roles no se crean ni modifican vía API — están precargados en la base de datos. Este endpoint se utiliza principalmente al momento de crear o editar usuarios, para obtener el `id` del rol que se enviará en el campo `rolId`.
+
+<Note>
+  Cualquier usuario autenticado puede consultar la lista de roles, independientemente de su propio rol (`ADMIN`, `VENDEDOR` o `ALMACENERO`).
+</Note>
+
+---
+
+## GET /api/roles
+
+Retorna todos los roles disponibles en el sistema con su identificador, nombre y descripción.
+
+**Autenticación:** `Authorization: Bearer <token>` — cualquier rol autenticado.
+
+### Response fields — 200 OK
+
+Retorna un **array** de objetos con la siguiente estructura:
+
+<ResponseField name="id" type="integer">
+  Identificador numérico del rol. Se utiliza como valor de `rolId` al crear o actualizar usuarios.
+</ResponseField>
+
+<ResponseField name="nombre" type="string">
+  Nombre del rol en mayúsculas: `ADMIN`, `VENDEDOR` o `ALMACENERO`.
+</ResponseField>
+
+<ResponseField name="descripcion" type="string">
+  Descripción legible del rol y sus responsabilidades.
+</ResponseField>
+
+---
+
+### Ejemplo
+
+```bash
+curl -s http://localhost:8080/api/roles \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+**Respuesta 200 OK:**
+
+```json
+[
+  {
+    "id": 1,
+    "nombre": "ADMIN",
+    "descripcion": "Administrador del sistema"
+  },
+  {
+    "id": 2,
+    "nombre": "VENDEDOR",
+    "descripcion": "Vendedor de la tienda"
+  },
+  {
+    "id": 3,
+    "nombre": "ALMACENERO",
+    "descripcion": "Encargado de almacén"
+  }
+]
+```
+
+---
+
+### Matriz de permisos por rol
+
+| Módulo | ADMIN | VENDEDOR | ALMACENERO |
+|--------|:-----:|:--------:|:----------:|
+| Usuarios — CRUD | ✅ | ❌ | ❌ |
+| Categorías — Crear / Editar / Eliminar | ✅ | ❌ | ❌ |
+| Productos — Crear / Editar | ✅ | ❌ | ✅ |
+| Productos — Eliminar | ✅ | ❌ | ❌ |
+| Clientes — CRUD | ✅ | ✅ | ✅ |
+| Proveedores — CRUD | ✅ | ✅ | ✅ |
+| Ventas — Registrar | ✅ | ✅ | ❌ |
+| Ventas — Anular | ✅ | ❌ | ❌ |
+| Compras — Crear / Recibir | ✅ | ❌ | ✅ |
+| Reportes — PDF | ✅ | ❌ | ❌ |
+
+### Asignar roles a usuarios
+
+Para asignar un rol al crear o actualizar un usuario, usa el `id` retornado por este endpoint en el campo `rolId` del body de [POST /api/usuarios](/api/usuarios) o [PUT /api/usuarios/{id}](/api/usuarios):
+
+```json
+{
+  "nombre": "María",
+  "apellido": "García",
+  "username": "mgarcia",
+  "email": "maria@tienda.com",
+  "password": "segura123",
+  "rolId": 2
+}
+```
+
+<Tip>
+  En la UI, llama a `GET /api/roles` al cargar el formulario de creación de usuarios para poblar dinámicamente el selector de roles con los `id` y `nombre` correctos.
+</Tip>
+
+---
+
+### Códigos de error
+
+| Código | Descripción | Causa |
+|--------|-------------|-------|
+| `401 Unauthorized` | No autenticado | Token ausente, inválido o expirado |

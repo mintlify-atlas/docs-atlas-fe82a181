@@ -1,0 +1,81 @@
+---
+title: "Tiendas Mi Cholo: Gestión Comercial Full-Stack"
+sidebarTitle: "Introducción"
+description: "Tiendas Mi Cholo es un sistema de gestión comercial para tiendas. Conoce su arquitectura, roles, módulos y tecnologías."
+---
+
+**Tiendas Mi Cholo** es un sistema de gestión comercial diseñado para pequeñas y medianas tiendas que necesitan controlar sus ventas, compras, inventario, clientes y proveedores desde una sola plataforma. Está dirigido a administradores, vendedores y almaceneros que buscan digitalizar y centralizar las operaciones diarias de su negocio con una interfaz web moderna y una API robusta.
+
+## Arquitectura del sistema
+
+Tiendas Mi Cholo es una aplicación full-stack compuesta por tres capas independientes que se comunican entre sí y pueden levantarse con un único comando de Docker Compose:
+
+| Capa | Tecnología | Puerto |
+|------|-----------|--------|
+| **Frontend** | Angular 22 (SSR) | `4200` |
+| **Backend / API REST** | Spring Boot 3.3.4 · Java 21 | `8080` |
+| **Base de datos** | MySQL 8 (`tienda_db`) | `3306` |
+| **Admin DB** | phpMyAdmin | `8081` |
+
+El backend expone todos sus endpoints bajo el prefijo `/api` y autentica cada petición mediante **JWT (HMAC-SHA256)**. El frontend Angular consume la API directamente; CORS está configurado para aceptar peticiones desde `http://localhost:4200`. La infraestructura de base de datos (MySQL + phpMyAdmin) se gestiona completamente con **Docker Compose**, incluyendo la inicialización automática del esquema y los datos semilla.
+
+## Módulos disponibles
+
+<CardGroup cols={2}>
+  <Card title="Dashboard" icon="chart-line" href="/modulos/dashboard">
+    Estadísticas en tiempo real: ventas del día, monto acumulado, productos con stock bajo y compras pendientes.
+  </Card>
+  <Card title="Productos" icon="box" href="/modulos/productos">
+    Catálogo completo de productos con código, precios de compra/venta, stock actual y mínimo, e imagen.
+  </Card>
+  <Card title="Ventas" icon="receipt" href="/modulos/ventas">
+    Registro de boletas, facturas y tickets. Descuento automático de stock e historial de movimientos.
+  </Card>
+  <Card title="Compras" icon="truck" href="/modulos/compras">
+    Órdenes de compra a proveedores con flujo de estados: PENDIENTE → RECIBIDA. Incremento automático de stock al recibir.
+  </Card>
+  <Card title="Inventario" icon="warehouse" href="/modulos/inventario">
+    Historial completo de movimientos de stock (entradas, salidas, ajustes) con trazabilidad por producto y usuario.
+  </Card>
+  <Card title="Usuarios" icon="users" href="/admin/usuarios">
+    Gestión de cuentas del sistema con asignación de roles y borrado lógico. Exclusivo para ADMIN.
+  </Card>
+  <Card title="Clientes" icon="user" href="/admin/clientes">
+    Registro de clientes con tipo de documento (DNI, RUC, Pasaporte, CE) y búsqueda por nombre o documento.
+  </Card>
+  <Card title="Proveedores" icon="building" href="/admin/proveedores">
+    Directorio de proveedores con RUC, persona de contacto y búsqueda por razón social.
+  </Card>
+  <Card title="Categorías" icon="tag" href="/admin/categorias">
+    Organización de productos por categoría. Creación y edición restringidas al rol ADMIN.
+  </Card>
+  <Card title="Reportes" icon="file-pdf" href="/admin/reportes">
+    Generación y descarga de reportes en PDF: reporte de ventas y reporte de inventario. Solo ADMIN.
+  </Card>
+</CardGroup>
+
+## Roles y permisos
+
+El sistema maneja tres roles de acceso. Cada usuario tiene exactamente un rol asignado, y los permisos se aplican a nivel de endpoint en la API.
+
+| Rol | Descripción general | Accesos clave |
+|-----|--------------------|--------------------|
+| **ADMIN** | Acceso total al sistema | Todos los módulos, reportes PDF, gestión de usuarios, anulación de ventas y configuración de categorías |
+| **VENDEDOR** | Operaciones de punto de venta | Registrar ventas, gestionar clientes y proveedores, consultar productos y compras |
+| **ALMACENERO** | Gestión de stock y abastecimiento | Crear/editar productos, registrar y recibir órdenes de compra, consultar inventario |
+
+<Note>
+  Los tres roles pueden acceder al **Dashboard**, **Inventario** (lectura), **Clientes**, **Proveedores**, **Productos** (lectura) y **Roles** (lectura). Las restricciones aplican únicamente a operaciones de escritura o módulos administrativos.
+</Note>
+
+## Stack tecnológico
+
+- **Frontend:** Angular 22 con Server-Side Rendering (SSR), TypeScript
+- **Backend:** Spring Boot 3.3.4, Java 21, Spring Security, Spring Data JPA
+- **Autenticación:** JWT (JJWT 0.12.6) — HMAC-SHA256, tokens de acceso (24 h) y refresh (7 días)
+- **Base de datos:** MySQL 8 — base de datos `tienda_db`
+- **ORM:** Hibernate con validación de esquema (`ddl-auto=validate`)
+- **Generación de reportes:** iTextPDF 5.5.13
+- **Infraestructura:** Docker Compose — MySQL 8 + phpMyAdmin
+- **Pool de conexiones:** HikariCP (máx. 10 conexiones)
+- **Seguridad de contraseñas:** BCrypt

@@ -1,0 +1,311 @@
+---
+title: "Users API — Manage System Users and Roles"
+sidebarTitle: "Usuarios"
+description: "CRUD de usuarios del sistema. GET, POST, PUT y DELETE en /api/usuarios. Requiere rol ADMIN. Las contraseñas se almacenan con BCrypt."
+---
+
+El módulo de usuarios permite al administrador gestionar las cuentas de acceso al sistema **Tiendas Mi Cholo**. Todos los endpoints requieren rol `ADMIN`. Las contraseñas nunca se devuelven en las respuestas y se almacenan cifradas con BCrypt. El borrado es **lógico**: en lugar de eliminar el registro, se establece `activo = false`.
+
+<Warning>
+  Todos los endpoints de este módulo requieren `Authorization: Bearer <token>` con rol **ADMIN**. Cualquier otro rol recibirá `403 Forbidden`.
+</Warning>
+
+---
+
+## GET /api/usuarios
+
+Lista todos los usuarios con `activo = true`.
+
+### Ejemplo
+
+```bash
+curl -s http://localhost:8080/api/usuarios \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+**Respuesta 200 OK:**
+
+```json
+[
+  {
+    "id": 1,
+    "nombre": "Juan",
+    "apellido": "Pérez",
+    "username": "admin",
+    "email": "admin@tienda.com",
+    "telefono": "987654321",
+    "activo": true,
+    "rol": {
+      "id": 1,
+      "nombre": "ADMIN",
+      "descripcion": "Administrador del sistema"
+    },
+    "createdAt": "2024-01-01T08:00:00",
+    "updatedAt": "2024-01-15T10:00:00"
+  }
+]
+```
+
+### Response fields
+
+<ResponseField name="id" type="integer">
+  Identificador único del usuario.
+</ResponseField>
+
+<ResponseField name="nombre" type="string">
+  Nombre de pila del usuario.
+</ResponseField>
+
+<ResponseField name="apellido" type="string">
+  Apellido del usuario.
+</ResponseField>
+
+<ResponseField name="username" type="string">
+  Nombre de usuario para login. Único en el sistema.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Correo electrónico. Único en el sistema.
+</ResponseField>
+
+<ResponseField name="telefono" type="string">
+  Teléfono de contacto. Puede ser `null`.
+</ResponseField>
+
+<ResponseField name="activo" type="boolean">
+  Estado del usuario. `false` indica borrado lógico.
+</ResponseField>
+
+<ResponseField name="rol" type="object">
+  Rol asignado al usuario.
+  <Expandable title="Campos de rol">
+    <ResponseField name="id" type="integer">ID del rol.</ResponseField>
+    <ResponseField name="nombre" type="string">Nombre del rol: `ADMIN`, `VENDEDOR` o `ALMACENERO`.</ResponseField>
+    <ResponseField name="descripcion" type="string">Descripción del rol.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  Fecha y hora de creación (ISO 8601).
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  Fecha y hora de última actualización (ISO 8601).
+</ResponseField>
+
+<Note>
+  El campo `password` nunca se incluye en ninguna respuesta de este módulo.
+</Note>
+
+---
+
+## GET /api/usuarios/\{id\}
+
+Obtiene un usuario por su ID numérico.
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID del usuario a consultar.
+</ParamField>
+
+### Ejemplo
+
+```bash
+curl -s http://localhost:8080/api/usuarios/1 \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+**Respuesta 404 Not Found:**
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00",
+  "status": 404,
+  "error": "Usuario no encontrado: 99"
+}
+```
+
+---
+
+## POST /api/usuarios
+
+Crea un nuevo usuario en el sistema. La contraseña se cifra automáticamente con BCrypt antes de persistir.
+
+### Request body
+
+<ParamField body="nombre" type="string" required>
+  Nombre de pila del usuario. Máximo 100 caracteres.
+</ParamField>
+
+<ParamField body="apellido" type="string" required>
+  Apellido del usuario. Máximo 100 caracteres.
+</ParamField>
+
+<ParamField body="username" type="string" required>
+  Nombre de usuario para login. Máximo 50 caracteres. Debe ser único en el sistema.
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  Correo electrónico válido. Único en el sistema.
+</ParamField>
+
+<ParamField body="password" type="string">
+  Contraseña en texto plano (se almacena como hash BCrypt). Entre 6 y 100 caracteres. Requerido al crear; opcional al editar (si se omite o envía vacío, no se modifica).
+</ParamField>
+
+<ParamField body="telefono" type="string">
+  Teléfono de contacto. Máximo 20 caracteres.
+</ParamField>
+
+<ParamField body="rolId" type="integer" required>
+  ID del rol a asignar. Obtener los IDs válidos desde [`GET /api/roles`](/api/roles).
+</ParamField>
+
+<ParamField body="activo" type="boolean">
+  Estado inicial del usuario. Por defecto `true`.
+</ParamField>
+
+### Ejemplo
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl -s -X POST http://localhost:8080/api/usuarios \
+      -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+      -H "Content-Type: application/json" \
+      -d '{
+        "nombre": "María",
+        "apellido": "García",
+        "username": "mgarcia",
+        "email": "maria@tienda.com",
+        "password": "segura123",
+        "telefono": "912345678",
+        "rolId": 2,
+        "activo": true
+      }'
+    ```
+  </Tab>
+  <Tab title="Request JSON">
+    ```json
+    {
+      "nombre": "María",
+      "apellido": "García",
+      "username": "mgarcia",
+      "email": "maria@tienda.com",
+      "password": "segura123",
+      "telefono": "912345678",
+      "rolId": 2,
+      "activo": true
+    }
+    ```
+  </Tab>
+</Tabs>
+
+**Respuesta 200 OK** — retorna el usuario creado (sin `password`):
+
+```json
+{
+  "id": 4,
+  "nombre": "María",
+  "apellido": "García",
+  "username": "mgarcia",
+  "email": "maria@tienda.com",
+  "telefono": "912345678",
+  "activo": true,
+  "rol": {
+    "id": 2,
+    "nombre": "VENDEDOR",
+    "descripcion": "Vendedor de la tienda"
+  },
+  "createdAt": "2024-01-15T14:00:00",
+  "updatedAt": "2024-01-15T14:00:00"
+}
+```
+
+---
+
+## PUT /api/usuarios/\{id\}
+
+Actualiza los datos de un usuario existente. Si el campo `password` se omite o se envía vacío, la contraseña actual no se modifica.
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID del usuario a actualizar.
+</ParamField>
+
+### Request body
+
+Mismos campos que `POST /api/usuarios`. El `username` **no se actualiza** vía PUT (el controlador no llama a `setUsername`).
+
+<Tip>
+  Para cambiar la contraseña de un usuario, incluye el campo `password` con el nuevo valor. Si lo omites, la contraseña existente se conserva intacta.
+</Tip>
+
+### Ejemplo
+
+```bash
+curl -s -X PUT http://localhost:8080/api/usuarios/4 \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombre": "María Lucía",
+    "apellido": "García Ríos",
+    "username": "mgarcia",
+    "email": "mlgarcia@tienda.com",
+    "telefono": "999888777",
+    "rolId": 3,
+    "activo": true
+  }'
+```
+
+---
+
+## DELETE /api/usuarios/\{id\}
+
+Realiza un **borrado lógico**: establece `activo = false` en el usuario. El registro se conserva en la base de datos y el usuario no aparecerá en `GET /api/usuarios`.
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID del usuario a desactivar.
+</ParamField>
+
+### Ejemplo
+
+```bash
+curl -s -X DELETE http://localhost:8080/api/usuarios/4 \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+**Respuesta:** `204 No Content` (sin cuerpo).
+
+<Warning>
+  El borrado lógico **no impide** que el usuario intente autenticarse si conoce sus credenciales. Para bloquear el acceso completamente, también actualiza `activo: false` con un PUT antes de hacer el DELETE, o cambia su contraseña.
+</Warning>
+
+---
+
+## Códigos de error
+
+| Código | Descripción | Causa habitual |
+|--------|-------------|----------------|
+| `400 Bad Request` | Validación fallida | Campo requerido vacío, email mal formado, password < 6 chars |
+| `401 Unauthorized` | No autenticado | Token ausente, inválido o expirado |
+| `403 Forbidden` | Sin permisos | El token pertenece a un rol distinto de ADMIN |
+| `404 Not Found` | Usuario no encontrado | El `id` no existe en la base de datos |
+
+**Respuesta 400 (validación):**
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00",
+  "status": 400,
+  "error": "Validación fallida",
+  "campos": {
+    "email": "must be a well-formed email address",
+    "password": "size must be between 6 and 100"
+  }
+}
+```

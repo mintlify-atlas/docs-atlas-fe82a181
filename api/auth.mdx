@@ -1,0 +1,166 @@
+---
+title: "Authentication API — POST /api/auth/login"
+sidebarTitle: "Auth"
+description: "POST /api/auth/login autentica credenciales y retorna access token JWT (24h) y refresh token (7d) junto con datos del usuario y su rol."
+---
+
+El módulo de autenticación es el punto de entrada al sistema **Tiendas Mi Cholo**. No requiere ningún token previo — basta con enviar credenciales válidas para recibir un par de tokens JWT firmados con HMAC-SHA256. El **access token** expira en 24 horas y el **refresh token** en 7 días. Todas las demás rutas de la API exigen que el access token viaje en la cabecera `Authorization: Bearer <token>`.
+
+<Note>
+  `/api/auth/**` es la única ruta pública del sistema. Cualquier otra petición sin token válido recibirá `401 Unauthorized`.
+</Note>
+
+---
+
+## POST /api/auth/login
+
+Autentica al usuario con username y contraseña, y retorna los tokens JWT junto con el perfil básico del usuario.
+
+### Request body
+
+<ParamField body="username" type="string" required>
+  Nombre de usuario registrado en el sistema. Case-sensitive.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  Contraseña del usuario. Se valida contra el hash BCrypt almacenado.
+</ParamField>
+
+### Response fields — 200 OK
+
+<ResponseField name="token" type="string">
+  Access token JWT firmado con HMAC-SHA256. Válido por **24 horas** (`86 400 000 ms`). Incluye claims `sub` (username), `roles` y `exp`.
+</ResponseField>
+
+<ResponseField name="refreshToken" type="string">
+  Refresh token JWT. Válido por **7 días** (`604 800 000 ms`). Usar para obtener nuevos access tokens cuando el anterior expire.
+</ResponseField>
+
+<ResponseField name="username" type="string">
+  Nombre de usuario autenticado.
+</ResponseField>
+
+<ResponseField name="nombre" type="string">
+  Nombre de pila del usuario.
+</ResponseField>
+
+<ResponseField name="apellido" type="string">
+  Apellido del usuario.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Correo electrónico registrado.
+</ResponseField>
+
+<ResponseField name="rol" type="string">
+  Rol asignado al usuario. Uno de: `ADMIN`, `VENDEDOR`, `ALMACENERO`.
+</ResponseField>
+
+### Claims del JWT
+
+El payload del token decodificado contiene:
+
+| Claim | Descripción |
+|-------|-------------|
+| `sub` | `username` del usuario |
+| `roles` | Array de roles p.ej. `["ROLE_ADMIN"]` |
+| `iat` | Timestamp de emisión (epoch segundos) |
+| `exp` | Timestamp de expiración (epoch segundos) |
+
+---
+
+### Ejemplo
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl -s -X POST http://localhost:8080/api/auth/login \
+      -H "Content-Type: application/json" \
+      -d '{
+        "username": "admin",
+        "password": "123456"
+      }'
+    ```
+  </Tab>
+  <Tab title="Request JSON">
+    ```json
+    {
+      "username": "admin",
+      "password": "123456"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+**Respuesta 200 OK:**
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlcyI6WyJST0xFX0FETUlOIl0sInN1YiI6ImFkbWluIiwiaWF0IjoxNzA1MzEyMDAwLCJleHAiOjE3MDUzOTg0MDB9.Xv9kL2mN8pQrT5wY3hJ0oKdE7fGcBiAzWuVsSxMlRnI",
+  "refreshToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiIsImlhdCI6MTcwNTMxMjAwMCwiZXhwIjoxNzA1OTE2ODAwfQ.mPqL9sXzA2bGcNdKvRtYwH8oEfJ3iU0uC5aQlW7yZ4k",
+  "username": "admin",
+  "nombre": "Juan",
+  "apellido": "Pérez",
+  "email": "admin@tienda.com",
+  "rol": "ADMIN"
+}
+```
+
+---
+
+### Usar el token en peticiones subsecuentes
+
+Una vez obtenido el token, inclúyelo como cabecera `Authorization` en cada llamada a rutas protegidas:
+
+```bash
+# Guardar el token en una variable de shell
+TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"123456"}' \
+  | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+
+# Usar el token en una petición protegida
+curl -s http://localhost:8080/api/usuarios \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+<Tip>
+  Almacena el `token` en `localStorage` o en el estado de tu aplicación front-end. Cuando recibas un `401` con mensaje de token expirado, usa el `refreshToken` para renovarlo sin pedir credenciales al usuario de nuevo.
+</Tip>
+
+---
+
+### Códigos de error
+
+| Código | Descripción | Causa habitual |
+|--------|-------------|----------------|
+| `401 Unauthorized` | Credenciales inválidas | Username o password incorrectos |
+| `400 Bad Request` | Validación fallida | Campos `username` o `password` ausentes |
+
+**Respuesta 401:**
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00",
+  "status": 401,
+  "error": "Credenciales inválidas"
+}
+```
+
+**Respuesta 400 (campo faltante):**
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00",
+  "status": 400,
+  "error": "Validación fallida",
+  "campos": {
+    "username": "must not be blank",
+    "password": "must not be blank"
+  }
+}
+```
+
+<Warning>
+  Los tokens **no se invalidan en el servidor** al hacer logout desde el front-end. Si necesitas revocar acceso inmediatamente, cambia la contraseña del usuario desde `/api/usuarios/{id}` (requiere rol ADMIN).
+</Warning>

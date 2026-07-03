@@ -1,0 +1,498 @@
+---
+title: "Products API — Catalog, Stock, and Bulk Import"
+sidebarTitle: "Productos"
+description: "CRUD de productos en /api/productos con búsqueda por texto, alertas de stock bajo e importación masiva con upsert por código."
+---
+
+El módulo de productos es el núcleo del catálogo de **Tiendas Mi Cholo**. Todos los roles autenticados pueden consultar, buscar y ver productos. La creación y edición requieren rol `ADMIN` o `ALMACENERO`. Solo `ADMIN` puede eliminar. El stock (`stockActual`) **no se modifica directamente** en los endpoints PUT — se gestiona automáticamente a través de ventas y compras. La importación masiva (`/importar`) realiza un **upsert** por código: actualiza el producto si ya existe, lo crea si no.
+
+---
+
+## GET /api/productos
+
+Lista todos los productos con `activo = true`.
+
+**Autenticación:** cualquier rol autenticado.
+
+### Ejemplo
+
+```bash
+curl -s http://localhost:8080/api/productos \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+**Respuesta 200 OK:**
+
+```json
+[
+  {
+    "id": 1,
+    "codigo": "PROD-001",
+    "nombre": "Laptop HP 15",
+    "descripcion": "Laptop HP 15 pulgadas, Intel Core i5, 8GB RAM",
+    "precioCompra": 2500.00,
+    "precioVenta": 3200.00,
+    "stockActual": 10,
+    "stockMinimo": 5,
+    "imagenUrl": "https://example.com/laptop-hp.jpg",
+    "codigoBarras": "7501234567890",
+    "unidadMedida": "UNIDADES",
+    "moneda": "PEN",
+    "activo": true,
+    "categoria": {
+      "id": 1,
+      "nombre": "Electrónica"
+    },
+    "almacen": {
+      "id": 1,
+      "nombre": "Almacén Principal"
+    },
+    "createdAt": "2024-01-01T08:00:00",
+    "updatedAt": "2024-01-15T10:00:00"
+  }
+]
+```
+
+### Response fields
+
+<ResponseField name="id" type="integer">
+  Identificador único del producto.
+</ResponseField>
+
+<ResponseField name="codigo" type="string">
+  Código único del producto (máx. 50 chars). Usado como clave de upsert en la importación masiva.
+</ResponseField>
+
+<ResponseField name="nombre" type="string">
+  Nombre del producto (máx. 150 chars).
+</ResponseField>
+
+<ResponseField name="descripcion" type="string">
+  Descripción detallada. Tipo `TEXT`, sin límite fijo.
+</ResponseField>
+
+<ResponseField name="precioCompra" type="number">
+  Precio de compra (costo). Precisión 12,2. En la moneda indicada en `moneda`.
+</ResponseField>
+
+<ResponseField name="precioVenta" type="number">
+  Precio de venta al público. Precisión 12,2.
+</ResponseField>
+
+<ResponseField name="stockActual" type="integer">
+  Unidades disponibles actualmente. Se actualiza automáticamente por ventas y compras.
+</ResponseField>
+
+<ResponseField name="stockMinimo" type="integer">
+  Umbral mínimo de stock. Si `stockActual < stockMinimo` el producto aparece en `/stock-bajo`.
+</ResponseField>
+
+<ResponseField name="imagenUrl" type="string">
+  URL pública de la imagen del producto. Máx. 500 chars.
+</ResponseField>
+
+<ResponseField name="codigoBarras" type="string">
+  Código de barras (EAN-13, UPC, etc.). Máx. 50 chars.
+</ResponseField>
+
+<ResponseField name="unidadMedida" type="string">
+  Unidad de medida. Por defecto `UNIDADES`. Máx. 50 chars.
+</ResponseField>
+
+<ResponseField name="moneda" type="string">
+  Código ISO 4217 de la moneda. Por defecto `PEN` (sol peruano). Máx. 10 chars.
+</ResponseField>
+
+<ResponseField name="activo" type="boolean">
+  Estado del producto. Los inactivos no aparecen en `GET /api/productos`.
+</ResponseField>
+
+<ResponseField name="categoria" type="object">
+  Categoría asociada.
+  <Expandable title="Campos de categoría">
+    <ResponseField name="id" type="integer">ID de la categoría.</ResponseField>
+    <ResponseField name="nombre" type="string">Nombre de la categoría.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="almacen" type="object">
+  Almacén asignado. Puede ser `null` si no se especificó.
+  <Expandable title="Campos de almacén">
+    <ResponseField name="id" type="integer">ID del almacén.</ResponseField>
+    <ResponseField name="nombre" type="string">Nombre del almacén.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  Fecha y hora de creación (ISO 8601).
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  Fecha y hora de última modificación (ISO 8601).
+</ResponseField>
+
+---
+
+## GET /api/productos/buscar
+
+Busca productos activos por nombre, código o descripción usando coincidencia parcial (LIKE).
+
+**Autenticación:** cualquier rol autenticado.
+
+### Query parameters
+
+<ParamField query="q" type="string" required>
+  Término de búsqueda. Se aplica sobre `nombre`, `codigo` y `descripcion`.
+</ParamField>
+
+### Ejemplo
+
+```bash
+curl -s "http://localhost:8080/api/productos/buscar?q=laptop" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+---
+
+## GET /api/productos/stock-bajo
+
+Retorna todos los productos activos cuyo `stockActual` es menor que su `stockMinimo`.
+
+**Autenticación:** cualquier rol autenticado.
+
+### Ejemplo
+
+```bash
+curl -s http://localhost:8080/api/productos/stock-bajo \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+**Respuesta 200 OK** — misma estructura que `GET /api/productos`, filtrada por `stockActual < stockMinimo`.
+
+<Tip>
+  Usa este endpoint en el dashboard para mostrar una alerta de reabastecimiento. El campo `stockMinimo` se configura por producto al momento de crearlo o editarlo.
+</Tip>
+
+---
+
+## GET /api/productos/\{id\}
+
+Obtiene un producto por su ID.
+
+**Autenticación:** cualquier rol autenticado.
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID del producto a consultar.
+</ParamField>
+
+### Ejemplo
+
+```bash
+curl -s http://localhost:8080/api/productos/1 \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+**Respuesta 404 Not Found:**
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00",
+  "status": 404,
+  "error": "Producto no encontrado: 99"
+}
+```
+
+---
+
+## POST /api/productos
+
+Crea un nuevo producto en el catálogo. **Requiere rol `ADMIN` o `ALMACENERO`.**
+
+### Request body
+
+<ParamField body="codigo" type="string" required>
+  Código único del producto. Máximo 50 caracteres. Se usa como clave de upsert en `/importar`.
+</ParamField>
+
+<ParamField body="nombre" type="string" required>
+  Nombre del producto. Máximo 150 caracteres.
+</ParamField>
+
+<ParamField body="descripcion" type="string">
+  Descripción detallada del producto.
+</ParamField>
+
+<ParamField body="precioCompra" type="number" required>
+  Precio de compra (costo). Debe ser `>= 0.0`.
+</ParamField>
+
+<ParamField body="precioVenta" type="number" required>
+  Precio de venta al público. Debe ser `>= 0.0`.
+</ParamField>
+
+<ParamField body="stockActual" type="integer">
+  Stock inicial disponible. Mínimo `0`. Por defecto `0`.
+</ParamField>
+
+<ParamField body="stockMinimo" type="integer">
+  Stock mínimo antes de alertar. Mínimo `0`. Por defecto `5`.
+</ParamField>
+
+<ParamField body="imagenUrl" type="string">
+  URL de la imagen del producto. Máximo 500 caracteres.
+</ParamField>
+
+<ParamField body="codigoBarras" type="string">
+  Código de barras del producto. Máximo 50 caracteres.
+</ParamField>
+
+<ParamField body="unidadMedida" type="string">
+  Unidad de medida (p.ej. `UNIDADES`, `KG`, `LITROS`). Por defecto `UNIDADES`. Máx. 50 chars.
+</ParamField>
+
+<ParamField body="moneda" type="string">
+  Código de moneda ISO 4217. Por defecto `PEN`. Máx. 10 chars.
+</ParamField>
+
+<ParamField body="categoriaId" type="integer">
+  ID de la categoría. Si es `null` y tampoco se envía `categoriaNombre`, el sistema lanzará un error o usará la categoría por defecto en `/importar`.
+</ParamField>
+
+<ParamField body="categoriaNombre" type="string">
+  Nombre de la categoría (solo usado en `/importar`). Si `categoriaId` es `null`, se busca por nombre; si no existe, se crea automáticamente.
+</ParamField>
+
+<ParamField body="almacenId" type="integer">
+  ID del almacén donde se almacena el producto. Opcional.
+</ParamField>
+
+<ParamField body="activo" type="boolean">
+  Estado del producto. Por defecto `true`.
+</ParamField>
+
+### Ejemplo
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl -s -X POST http://localhost:8080/api/productos \
+      -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+      -H "Content-Type: application/json" \
+      -d '{
+        "codigo": "PROD-002",
+        "nombre": "Mouse Logitech M185",
+        "descripcion": "Mouse inalámbrico compacto, receptor nano USB",
+        "precioCompra": 45.00,
+        "precioVenta": 75.00,
+        "stockActual": 50,
+        "stockMinimo": 10,
+        "imagenUrl": "https://example.com/mouse-m185.jpg",
+        "codigoBarras": "5099206065338",
+        "unidadMedida": "UNIDADES",
+        "moneda": "PEN",
+        "categoriaId": 1,
+        "almacenId": 1,
+        "activo": true
+      }'
+    ```
+  </Tab>
+  <Tab title="Request JSON">
+    ```json
+    {
+      "codigo": "PROD-002",
+      "nombre": "Mouse Logitech M185",
+      "descripcion": "Mouse inalámbrico compacto, receptor nano USB",
+      "precioCompra": 45.00,
+      "precioVenta": 75.00,
+      "stockActual": 50,
+      "stockMinimo": 10,
+      "imagenUrl": "https://example.com/mouse-m185.jpg",
+      "codigoBarras": "5099206065338",
+      "unidadMedida": "UNIDADES",
+      "moneda": "PEN",
+      "categoriaId": 1,
+      "almacenId": 1,
+      "activo": true
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## PUT /api/productos/\{id\}
+
+Actualiza los datos de un producto. **Requiere rol `ADMIN` o `ALMACENERO`.**
+
+<Warning>
+  Este endpoint **no actualiza `stockActual`**. El stock se gestiona exclusivamente a través del módulo de Ventas (decrementa) y Compras (incrementa). Para inicializar el stock, usa `POST /api/productos` con el valor correcto en `stockActual`.
+</Warning>
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID del producto a actualizar.
+</ParamField>
+
+### Request body
+
+Mismos campos que `POST /api/productos`. El campo `stockActual` es ignorado por el servidor en este endpoint.
+
+### Ejemplo
+
+```bash
+curl -s -X PUT http://localhost:8080/api/productos/2 \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "codigo": "PROD-002",
+    "nombre": "Mouse Logitech M185 Inalámbrico",
+    "precioCompra": 42.00,
+    "precioVenta": 72.00,
+    "stockMinimo": 8,
+    "unidadMedida": "UNIDADES",
+    "moneda": "PEN",
+    "categoriaId": 1
+  }'
+```
+
+---
+
+## DELETE /api/productos/\{id\}
+
+Desactiva un producto (borrado lógico — `activo = false`). **Solo ADMIN.**
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID del producto a desactivar.
+</ParamField>
+
+### Ejemplo
+
+```bash
+curl -s -X DELETE http://localhost:8080/api/productos/2 \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+**Respuesta:** `204 No Content` (sin cuerpo).
+
+---
+
+## POST /api/productos/importar
+
+Importa un array de productos de forma masiva. **Requiere rol `ADMIN` o `ALMACENERO`.**
+
+Realiza **upsert por `codigo`**:
+- Si existe un producto con ese código → lo **actualiza**.
+- Si no existe → lo **crea**.
+
+Las filas con `codigo` o `nombre` vacíos se omiten silenciosamente. La categoría se resuelve en este orden: `categoriaId` → `categoriaNombre` → categoría `"Abarrotes"` (se crea si no existe).
+
+### Request body
+
+Array de objetos con la misma estructura que `POST /api/productos`.
+
+### Ejemplo
+
+<Tabs>
+  <Tab title="cURL">
+    ```bash
+    curl -s -X POST http://localhost:8080/api/productos/importar \
+      -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
+      -H "Content-Type: application/json" \
+      -d '[
+        {
+          "codigo": "PROD-010",
+          "nombre": "Arroz Costeño 5kg",
+          "precioCompra": 18.50,
+          "precioVenta": 24.00,
+          "stockActual": 200,
+          "stockMinimo": 50,
+          "unidadMedida": "BOLSA",
+          "moneda": "PEN",
+          "categoriaNombre": "Abarrotes"
+        },
+        {
+          "codigo": "PROD-011",
+          "nombre": "Aceite Primor 1L",
+          "precioCompra": 8.00,
+          "precioVenta": 11.50,
+          "stockActual": 150,
+          "stockMinimo": 30,
+          "unidadMedida": "BOTELLA",
+          "moneda": "PEN",
+          "categoriaId": 2
+        }
+      ]'
+    ```
+  </Tab>
+  <Tab title="Request JSON">
+    ```json
+    [
+      {
+        "codigo": "PROD-010",
+        "nombre": "Arroz Costeño 5kg",
+        "precioCompra": 18.50,
+        "precioVenta": 24.00,
+        "stockActual": 200,
+        "stockMinimo": 50,
+        "unidadMedida": "BOLSA",
+        "moneda": "PEN",
+        "categoriaNombre": "Abarrotes"
+      },
+      {
+        "codigo": "PROD-011",
+        "nombre": "Aceite Primor 1L",
+        "precioCompra": 8.00,
+        "precioVenta": 11.50,
+        "stockActual": 150,
+        "stockMinimo": 30,
+        "unidadMedida": "BOTELLA",
+        "moneda": "PEN",
+        "categoriaId": 2
+      }
+    ]
+    ```
+  </Tab>
+</Tabs>
+
+**Respuesta 200 OK** — array con los productos creados o actualizados:
+
+```json
+[
+  {
+    "id": 10,
+    "codigo": "PROD-010",
+    "nombre": "Arroz Costeño 5kg",
+    "precioCompra": 18.50,
+    "precioVenta": 24.00,
+    "stockActual": 200,
+    "stockMinimo": 50,
+    "unidadMedida": "BOLSA",
+    "moneda": "PEN",
+    "activo": true,
+    "categoria": { "id": 2, "nombre": "Abarrotes" },
+    "almacen": null,
+    "createdAt": "2024-01-15T16:00:00",
+    "updatedAt": "2024-01-15T16:00:00"
+  }
+]
+```
+
+<Note>
+  La importación masiva es idempotente por `codigo`. Puedes reenviar el mismo archivo CSV/JSON procesado varias veces sin crear duplicados.
+</Note>
+
+---
+
+## Códigos de error
+
+| Código | Descripción | Causa habitual |
+|--------|-------------|----------------|
+| `400 Bad Request` | Validación fallida | Campos requeridos vacíos o precios negativos |
+| `401 Unauthorized` | No autenticado | Token ausente, inválido o expirado |
+| `403 Forbidden` | Sin permisos | Rol VENDEDOR intentando crear/editar; o rol no-ADMIN intentando eliminar |
+| `404 Not Found` | Recurso no encontrado | `id`, `categoriaId` o `almacenId` inexistentes |

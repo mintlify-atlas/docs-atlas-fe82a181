@@ -1,0 +1,120 @@
+---
+title: "Dashboard: Estadísticas y KPIs en Tiempo Real"
+sidebarTitle: "Dashboard"
+description: "El dashboard de Tiendas Mi Cholo muestra ventas del día, totales del mes, stock bajo y compras pendientes actualizados en tiempo real."
+---
+
+El **Dashboard** es la pantalla central de Tiendas Mi Cholo. Al iniciar sesión, cualquier usuario autenticado accede a un resumen ejecutivo del negocio: cuánto se vendió hoy, cuántos productos tienen stock bajo, cuántas compras siguen pendientes de recepción y una gráfica de ventas mensuales para el año en curso. Todos los datos provienen de una sola llamada al backend y se recargan automáticamente al montar el componente.
+
+## KPIs del Dashboard
+
+El backend consolida ocho indicadores en un único endpoint y los devuelve como un objeto JSON plano. La interfaz Angular renderiza cada valor en una tarjeta con ícono y etiqueta.
+
+<CardGroup cols={3}>
+  <Card title="ventasHoy" icon="circle-dollar-sign">
+    Monto total (S/) facturado en el día calendario actual. Suma sólo ventas con estado `COMPLETADA`.
+  </Card>
+  <Card title="totalVentas" icon="chart-bar">
+    Cantidad acumulada de ventas registradas en el sistema desde el inicio de operaciones.
+  </Card>
+  <Card title="totalProductos" icon="box">
+    Número de productos activos en el catálogo (`activo = true`).
+  </Card>
+  <Card title="totalClientes" icon="users">
+    Cantidad de clientes activos registrados.
+  </Card>
+  <Card title="comprasPendientes" icon="clock">
+    Órdenes de compra con estado `PENDIENTE` que aún no han sido recibidas en almacén.
+  </Card>
+  <Card title="productosStockBajo" icon="triangle-alert">
+    Lista de productos donde `stockActual < stockMinimo`. El campo `alertasStock` expone el conteo numérico de esa lista.
+  </Card>
+</CardGroup>
+
+Además de los KPIs anteriores, el endpoint devuelve dos estructuras adicionales:
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `ventasPorMes` | `Map<Integer, BigDecimal>` | Monto vendido por mes (1–12) para el año en curso |
+| `productosPorCategoria` | `Array` | Conteo de productos agrupados por categoría |
+
+## Endpoint de Estadísticas
+
+```http
+GET /api/dashboard/stats
+Authorization: Bearer <token>
+```
+
+**Respuesta `200 OK`:**
+
+```json
+{
+  "ventasHoy": 15750.00,
+  "totalVentas": 87,
+  "totalProductos": 48,
+  "totalClientes": 120,
+  "comprasPendientes": 2,
+  "productosStockBajo": [
+    {
+      "id": 3,
+      "nombre": "Mouse Logitech M185",
+      "stockActual": 2,
+      "stockMinimo": 10
+    },
+    {
+      "id": 7,
+      "nombre": "Cable HDMI 2m",
+      "stockActual": 0,
+      "stockMinimo": 5
+    }
+  ],
+  "alertasStock": 2,
+  "ventasPorMes": {
+    "1": 0.00,
+    "2": 0.00,
+    "3": 12400.00,
+    "4": 31800.00,
+    "5": 19500.00,
+    "6": 0.00,
+    "7": 0.00,
+    "8": 0.00,
+    "9": 0.00,
+    "10": 0.00,
+    "11": 0.00,
+    "12": 0.00
+  },
+  "productosPorCategoria": [
+    { "categoria": "Electrónica", "cantidad": 18 },
+    { "categoria": "Abarrotes",   "cantidad": 30 }
+  ]
+}
+```
+
+## Control de Acceso
+
+| Rol | Puede ver el Dashboard |
+|---|:---:|
+| ADMIN | ✅ |
+| VENDEDOR | ✅ |
+| ALMACENERO | ✅ |
+
+El endpoint `/api/dashboard/stats` es accesible para **cualquier usuario autenticado**. No se requiere un rol específico; basta con incluir el header `Authorization: Bearer <token>`.
+
+## Gráfica de Ventas Mensuales
+
+El componente Angular recibe el mapa `ventasPorMes` y dibuja un gráfico de barras con los 12 meses del año. Las barras se escalan proporcionalmente al mes con mayor monto. Los meses sin ventas muestran la barra vacía. El año que se muestra corresponde al año en curso en el servidor (`LocalDateTime.now().getYear()`).
+
+## Accesos Rápidos
+
+Desde el Dashboard el usuario puede navegar directamente a:
+
+- **Nueva Venta** → `/ventas/nueva`
+- **Clientes** → `/clientes`
+- **Productos** → `/productos`
+- **Nueva Compra** → `/compras/nueva`
+- **Inventario** → `/inventario`
+- **Reportes PDF** → `/reportes`
+
+<Note>
+  Cuando `alertasStock > 0`, el dashboard muestra la sección **"Productos con Stock Bajo"** con una barra de progreso por producto. La barra se vuelve roja (`critical`) si `stockActual === 0`. Usa esta sección como punto de entrada diario para identificar qué productos necesitan reordenarse. Puedes hacer clic en **"Ver todo"** para ir directamente al módulo de Inventario y revisar el historial de movimientos.
+</Note>

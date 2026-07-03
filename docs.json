@@ -1,72 +1,102 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mintlify Starter Kit",
+  "name": "Tiendas Mi Cholo",
+  "theme": "almond",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#f10d5b"
   },
-  "favicon": "/favicon.svg",
-  "navigation": {
-    "pages": [
-      {
-        "group": "Getting Started",
-        "pages": [
-          "index",
-          "quickstart"
-        ]
-      }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
+  "favicon": "https://media.brand.dev/e9275121-050e-4a4a-a991-09fdd335b097.png",
   "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
     "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://app.mintlify.com"
+      "type": "github",
+      "href": "https://github.com/interezante456-pixel/Miercoles-Proyecto"
     }
-  },
-  "contextual": {
-    "options": [
-      "copy",
-      "view",
-      "chatgpt",
-      "claude",
-      "perplexity",
-      "mcp",
-      "cursor",
-      "vscode"
-    ]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "github": "https://github.com/interezante456-pixel/Miercoles-Proyecto"
     }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guía de Usuario",
+        "groups": [
+          {
+            "group": "Primeros Pasos",
+            "pages": [
+              "introduccion",
+              "inicio-rapido",
+              "autenticacion"
+            ]
+          },
+          {
+            "group": "Módulos Principales",
+            "pages": [
+              "modulos/dashboard",
+              "modulos/productos",
+              "modulos/ventas",
+              "modulos/compras",
+              "modulos/inventario"
+            ]
+          },
+          {
+            "group": "Administración",
+            "pages": [
+              "admin/usuarios",
+              "admin/clientes",
+              "admin/proveedores",
+              "admin/categorias",
+              "admin/reportes"
+            ]
+          },
+          {
+            "group": "Despliegue",
+            "pages": [
+              "despliegue/requisitos",
+              "despliegue/docker",
+              "despliegue/configuracion"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Autenticación",
+            "pages": [
+              "api/auth"
+            ]
+          },
+          {
+            "group": "Recursos",
+            "pages": [
+              "api/usuarios",
+              "api/roles",
+              "api/categorias",
+              "api/productos",
+              "api/clientes",
+              "api/proveedores"
+            ]
+          },
+          {
+            "group": "Operaciones Comerciales",
+            "pages": [
+              "api/ventas",
+              "api/compras",
+              "api/inventario"
+            ]
+          },
+          {
+            "group": "Analítica",
+            "pages": [
+              "api/dashboard",
+              "api/reportes"
+            ]
+          }
+        ]
+      }
+    ]
   }
 }

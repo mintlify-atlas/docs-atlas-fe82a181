@@ -1,0 +1,147 @@
+---
+title: "Reports API — Download PDF Sales and Inventory Reports"
+sidebarTitle: "Reportes"
+description: "GET /api/reportes/ventas y /api/reportes/inventario generan y descargan reportes PDF. Solo accesible para ADMIN. Generados con iTextPDF."
+---
+
+The Reportes module generates on-demand PDF documents for store administrators. Two reports are available: a **Sales Report** that lists every transaction with customer, user, subtotal, IGV, total, and status; and an **Inventory Report** that lists all products with their codes, categories, current stock, minimum stock, sale price, and a low-stock flag. Both reports are generated server-side at request time using **iTextPDF 5.5.13.3** and streamed directly to the client as a file download — no intermediate storage is involved. Access is restricted exclusively to the `ADMIN` role.
+
+<Warning>
+  These endpoints return a binary PDF stream, **not** a JSON body. Any role other than `ADMIN` will receive a `403 Forbidden` JSON error. Ensure your HTTP client handles the binary response correctly (e.g. use `-o filename.pdf` with curl, or handle the `Blob` in a browser fetch call).
+</Warning>
+
+---
+
+## GET /api/reportes/ventas
+
+Generate and download the sales report as a PDF file. The report is rendered in A4 landscape orientation and includes a styled header, alternating-row table, and a total count footer.
+
+**`GET http://localhost:8080/api/reportes/ventas`**
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token — requires `ADMIN` role. Class-level `@PreAuthorize("hasRole('ADMIN')")` applies to all endpoints in this module.
+</ParamField>
+
+### Response Headers
+
+| Header | Value |
+|--------|-------|
+| `Content-Type` | `application/pdf` |
+| `Content-Disposition` | `attachment; filename=reporte-ventas.pdf` |
+| `HTTP Status` | `200 OK` |
+
+### PDF Report Contents
+
+The generated document includes the following columns:
+
+| Column | Source field |
+|--------|-------------|
+| `#` | Row index |
+| `N° Venta` | `venta.numeroVenta` |
+| `Cliente` | `cliente.nombres + apellidos` |
+| `Usuario` | `usuario.nombre + apellido` |
+| `Subtotal` | `venta.subtotal` (prefixed `S/`) |
+| `IGV` | `venta.igv` (prefixed `S/`) |
+| `Total` | `venta.total` (prefixed `S/`) |
+| `Estado` | `venta.estado` (`COMPLETADA` / `ANULADA`) |
+
+### Error Codes
+
+| Status | Meaning |
+|--------|---------|
+| `401 Unauthorized` | Token missing, invalid, or expired. |
+| `403 Forbidden` | Authenticated user does not have `ADMIN` role. |
+| `500 Internal Server Error` | PDF generation failed (iTextPDF `DocumentException`). |
+
+```bash cURL — Download sales report
+curl -X GET http://localhost:8080/api/reportes/ventas \
+  -H "Authorization: Bearer <token>" \
+  -o reporte-ventas.pdf
+```
+
+```bash Verify the downloaded file
+file reporte-ventas.pdf
+# reporte-ventas.pdf: PDF document, version 1.4
+```
+
+---
+
+## GET /api/reportes/inventario
+
+Generate and download the inventory report as a PDF file. The report is rendered in A4 portrait orientation and lists all products currently in the catalog with their stock status highlighted.
+
+**`GET http://localhost:8080/api/reportes/inventario`**
+
+### Authorization
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token — requires `ADMIN` role.
+</ParamField>
+
+### Response Headers
+
+| Header | Value |
+|--------|-------|
+| `Content-Type` | `application/pdf` |
+| `Content-Disposition` | `attachment; filename=reporte-inventario.pdf` |
+| `HTTP Status` | `200 OK` |
+
+### PDF Report Contents
+
+The generated document includes the following columns:
+
+| Column | Source field | Notes |
+|--------|-------------|-------|
+| `Código` | `producto.codigo` | |
+| `Nombre` | `producto.nombre` | |
+| `Categoría` | `producto.categoria.nombre` | |
+| `Stock Act.` | `producto.stockActual` | Highlighted red if stock ≤ minimum |
+| `Stock Mín.` | `producto.stockMinimo` | |
+| `P. Venta` | `producto.precioVenta` | Prefixed `S/` |
+| `Estado` | `"STOCK BAJO"` or `"OK"` | Red cell when `stockActual <= stockMinimo` |
+
+<Note>
+  Rows where `stockActual <= stockMinimo` are flagged visually in the PDF with a red cell background (`#FEE2E2`) for both the stock column and the status column, making low-stock items immediately visible at a glance.
+</Note>
+
+### Error Codes
+
+| Status | Meaning |
+|--------|---------|
+| `401 Unauthorized` | Token missing, invalid, or expired. |
+| `403 Forbidden` | Authenticated user does not have `ADMIN` role. |
+| `500 Internal Server Error` | PDF generation failed (iTextPDF `DocumentException`). |
+
+```bash cURL — Download inventory report
+curl -X GET http://localhost:8080/api/reportes/inventario \
+  -H "Authorization: Bearer <token>" \
+  -o reporte-inventario.pdf
+```
+
+---
+
+## PDF Generation Library
+
+<Note>
+  Both reports are generated using **iTextPDF 5.5.13.3** (`com.itextpdf:itextpdf`), a battle-tested Java PDF library. Documents are assembled in-memory using `ByteArrayOutputStream` and streamed directly in the HTTP response body — no temporary files are written to disk. The PDF color palette uses indigo (`#6366F1`) for column headers and slate (`#1E293B`) for the document title banner.
+</Note>
+
+---
+
+## 403 for Non-ADMIN Roles
+
+<Warning>
+  If any user with `VENDEDOR` or `ALMACENERO` role calls either report endpoint, Spring Security will return a `403 Forbidden` before the controller method is even reached. The response body will be a standard JSON error — not a PDF.
+
+  ```json 403 — Forbidden
+  {
+    "timestamp": "2024-01-15T10:30:00",
+    "status": 403,
+    "error": "Acceso denegado"
+  }
+  ```
+
+  Make sure your frontend conditionally renders report download buttons based on the `rol` field returned at login.
+</Warning>

@@ -1,0 +1,168 @@
+---
+title: "Registrar y Gestionar Ventas en Tiendas Mi Cholo"
+sidebarTitle: "Ventas"
+description: "Registra ventas con múltiples productos, tipos de comprobante (BOLETA, FACTURA, TICKET), descuentos por ítem e IGV calculado automáticamente."
+---
+
+El módulo de **Ventas** es el punto de transacción principal de Tiendas Mi Cholo. Incluye un **POS (Point of Sale)** con soporte para escaneo de códigos de barras, atajos de teclado (`F2` buscar producto, `F4` buscar cliente, `F9` confirmar venta), cálculo automático de IGV al 18 %, descuentos por línea de ítem y tres tipos de comprobante. Cuando una venta se registra, el stock de cada producto se descuenta en la misma transacción de base de datos y se genera un movimiento de inventario tipo `SALIDA` de forma automática.
+
+## Flujo de una Venta
+
+<Steps>
+  <Step title="Seleccionar tipo de comprobante">
+    El operador elige entre **BOLETA**, **FACTURA** o **TICKET**. Para FACTURA es obligatorio asociar un cliente con RUC. Para BOLETA y TICKET el cliente es opcional (se usa "Público General" si se deja vacío).
+  </Step>
+  <Step title="Buscar y seleccionar cliente">
+    Se busca al cliente por nombre, apellido o número de documento. Si no existe, el sistema lo crea automáticamente con los datos ingresados. Para FACTURA se valida que el RUC tenga exactamente 11 dígitos.
+  </Step>
+  <Step title="Agregar productos al carrito">
+    El operador escanea el código de barras del producto o lo busca por nombre/código interno. Al encontrar una coincidencia exacta de código de barras, el producto se agrega al carrito directamente sin confirmación adicional. Si el producto no tiene stock, se muestra un error y no se agrega.
+  </Step>
+  <Step title="Ajustar cantidades y descuentos">
+    Cada ítem del carrito muestra controles `+`/`−` para modificar la cantidad. El campo `descuento` es un porcentaje (0–100) que se aplica al subtotal de ese ítem.
+  </Step>
+  <Step title="Seleccionar método de pago">
+    El operador selecciona **Efectivo**, **Tarjeta** o **Yape/Plin**. Si elige efectivo, puede ingresar el monto recibido y el sistema calcula el vuelto automáticamente.
+  </Step>
+  <Step title="Confirmar la venta">
+    Al hacer clic en **Confirmar Venta** (o presionar `F9`), el frontend envía la petición `POST /api/ventas`. El backend valida el stock de cada producto, calcula el total con IGV, genera el número de venta, descuenta el stock y crea los movimientos de inventario en una sola transacción.
+  </Step>
+  <Step title="Stock descontado e inventario actualizado">
+    Por cada línea de detalle, `stockActual` del producto se reduce en la cantidad vendida y se registra un `Inventario` con `tipo = SALIDA`, `motivo = "Venta VNT-YYYY-NNNN"` y referencia a la venta.
+  </Step>
+</Steps>
+
+## Estados de una Venta
+
+| Estado | Descripción |
+|---|---|
+| `COMPLETADA` | Estado inicial al registrar exitosamente. El stock ya fue descontado. |
+| `PENDIENTE` | Reservado para uso futuro (ventas a crédito, etc.). |
+| `ANULADA` | La venta fue cancelada por un ADMIN. El stock fue revertido. |
+
+## Tipos de Comprobante
+
+| Tipo | Uso |
+|---|---|
+| `BOLETA` | Venta al consumidor final con DNI. Cliente opcional. |
+| `FACTURA` | Venta a empresa. Requiere RUC (11 dígitos) y razón social. |
+| `TICKET` | Ticket simplificado, sin datos de cliente obligatorios. |
+
+## Cálculo de IGV y Totales
+
+El backend calcula los montos exclusivamente en el servidor — el frontend solo presenta los valores calculados:
+
+```
+subtotal_item = precioUnitario × cantidad × (1 − descuento / 100)
+subtotal      = Σ subtotal_item
+IGV           = subtotal × 0.18   (18%, redondeado a 2 decimales)
+total         = subtotal + IGV
+```
+
+El número de venta se genera automáticamente con el patrón `V-YYYY-NNNN` (ej. `V-2024-0001`).
+
+## Registrar una Venta — API
+
+```http
+POST /api/ventas
+Authorization: Bearer <token>   # ADMIN o VENDEDOR
+Content-Type: application/json
+```
+
+```json
+{
+  "clienteId": 1,
+  "tipoComprobante": "BOLETA",
+  "observaciones": "Método de Pago: EFECTIVO (Recibido: S/ 200.00, Vuelto: S/ 14.00)",
+  "detalles": [
+    {
+      "productoId": 1,
+      "cantidad": 1,
+      "precioUnitario": 3200.00,
+      "descuento": 0.00
+    },
+    {
+      "productoId": 2,
+      "cantidad": 3,
+      "precioUnitario": 75.00,
+      "descuento": 5.00
+    }
+  ]
+}
+```
+
+### Campos del detalle (`detalles[]`)
+
+| Campo | Tipo | Requerido | Descripción |
+|---|---|:---:|---|
+| `productoId` | `Long` | ✅ | ID del producto a vender |
+| `cantidad` | `Integer` | ✅ | Unidades a vender (mínimo 1) |
+| `precioUnitario` | `BigDecimal` | ✅ | Precio unitario aplicado (≥ 0) |
+| `descuento` | `BigDecimal` | ❌ | Descuento en % sobre el ítem (0–100, default 0) |
+
+**Respuesta `200 OK`:** objeto `Venta` completo con número generado, totales calculados y datos del cliente y usuario.
+
+## Anular una Venta
+
+```http
+PATCH /api/ventas/{id}/anular
+Authorization: Bearer <token>   # Solo ADMIN
+```
+
+Al anular una venta:
+1. El estado cambia a `ANULADA`.
+2. Por cada ítem del detalle, `stockActual` del producto se **incrementa** en la cantidad vendida.
+3. Se crea un movimiento de inventario con `tipo = ENTRADA` y `motivo = "Anulación venta VNT-YYYY-NNNN"`.
+
+**Respuesta `200 OK`:** objeto `Venta` con `estado = "ANULADA"`.
+
+<Warning>
+  Antes de registrar la venta, el backend verifica que `stockActual ≥ cantidad` para cada producto. Si algún producto no tiene suficiente stock, toda la transacción se rechaza con:
+
+  ```json
+  {
+    "timestamp": "2024-01-15T14:30:00.123",
+    "status": 400,
+    "error": "Stock insuficiente para: Laptop HP 15. Disponible: 2"
+  }
+  ```
+
+  No se descuenta stock parcialmente: o se procesa la venta completa o no se procesa ningún ítem.
+</Warning>
+
+## Permisos por Rol
+
+| Operación | ADMIN | VENDEDOR | ALMACENERO |
+|---|:---:|:---:|:---:|
+| Listar ventas (`GET`) | ✅ | ✅ | ✅ |
+| Ver detalle por ID | ✅ | ✅ | ✅ |
+| Registrar venta (`POST`) | ✅ | ✅ | ❌ |
+| Anular venta (`PATCH`) | ✅ | ❌ | ❌ |
+
+## Estructura de Respuesta
+
+```json
+{
+  "id": 1,
+  "numeroVenta": "V-2024-0001",
+  "tipoComprobante": "BOLETA",
+  "estado": "COMPLETADA",
+  "subtotal": 2922.25,
+  "igv": 526.01,
+  "total": 3448.26,
+  "observaciones": "Método de Pago: EFECTIVO",
+  "cliente": {
+    "id": 1,
+    "nombres": "Carlos Alberto",
+    "apellidos": "Rodríguez Silva",
+    "nroDoc": "12345678"
+  },
+  "usuario": {
+    "id": 2,
+    "nombre": "Luis",
+    "apellido": "Mendoza",
+    "username": "lmendoza"
+  },
+  "fechaVenta": "2024-01-15T14:30:00"
+}
+```

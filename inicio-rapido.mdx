@@ -1,0 +1,164 @@
+---
+title: "Get Started with Tiendas Mi Cholo"
+sidebarTitle: "Inicio Rápido"
+description: "Levanta el sistema completo con Docker Compose y realiza tu primera venta en menos de 10 minutos siguiendo esta guía paso a paso."
+---
+
+En esta guía levantarás la base de datos MySQL con Docker, arrancarás el backend Spring Boot y el frontend Angular, y harás tu primera llamada autenticada a la API — todo en menos de 10 minutos. Al terminar tendrás el sistema completamente funcional corriendo en tu máquina local, con datos de prueba precargados y un token JWT listo para explorar el resto de los endpoints.
+
+## Prerrequisitos
+
+Asegúrate de tener instalados los siguientes programas antes de comenzar:
+
+| Herramienta | Versión mínima | Para qué se usa |
+|------------|---------------|-----------------|
+| **Docker Desktop** | Cualquier versión reciente | Levantar MySQL y phpMyAdmin |
+| **Java JDK** | 21 | Compilar y ejecutar el backend Spring Boot |
+| **Node.js** | 20+ | Instalar dependencias y servir el frontend Angular |
+| **Git** | Cualquier versión | Clonar el repositorio |
+
+<Note>
+  **Puertos utilizados por defecto:**
+  - `4200` — Frontend Angular
+  - `8080` — Backend Spring Boot API (`http://localhost:8080/api`)
+  - `3306` — MySQL
+  - `8081` — phpMyAdmin (opcional, para inspeccionar la base de datos)
+
+  Asegúrate de que ningún otro proceso esté ocupando estos puertos antes de continuar.
+</Note>
+
+## Pasos
+
+<Steps>
+  <Step title="Clonar el repositorio">
+    Clona el repositorio del proyecto en tu máquina local:
+
+    ```bash
+    git clone https://github.com/interezante456-pixel/Miercoles-Proyecto.git
+    cd Miercoles-Proyecto
+    ```
+
+    El repositorio contiene tres carpetas principales: `backend/` (Spring Boot), `Frontend/` (Angular) y `database/` (scripts SQL de esquema y datos semilla).
+  </Step>
+
+  <Step title="Levantar MySQL con Docker Compose">
+    Desde la raíz del repositorio, inicia el contenedor de MySQL. Docker Compose ejecutará automáticamente los scripts `database/schema.sql` y `database/data.sql` para crear la base de datos `tienda_db` y cargar los datos de prueba:
+
+    ```bash
+    docker-compose up -d mysql
+    ```
+
+    Opcionalmente, también puedes levantar phpMyAdmin para inspeccionar la base de datos en `http://localhost:8081`:
+
+    ```bash
+    docker-compose up -d mysql phpmyadmin
+    ```
+
+    Espera unos segundos a que MySQL pase el healthcheck. Puedes verificar el estado con:
+
+    ```bash
+    docker-compose ps
+    ```
+
+    La columna `Status` del servicio `mysql` debe mostrar `healthy`.
+  </Step>
+
+  <Step title="Iniciar el backend Spring Boot">
+    Abre una nueva terminal, entra a la carpeta `backend/` y ejecuta la aplicación con Maven Wrapper:
+
+    ```bash
+    # macOS / Linux
+    cd backend
+    ./mvnw spring-boot:run
+    ```
+
+    ```bat
+    :: Windows (CMD o PowerShell)
+    cd backend
+    mvnw.cmd spring-boot:run
+    ```
+
+    El backend estará listo cuando veas en la consola una línea similar a:
+
+    ```
+    Started TiendaBackendApplication in X.XXX seconds
+    ```
+
+    La API quedará disponible en `http://localhost:8080/api`.
+  </Step>
+
+  <Step title="Iniciar el frontend Angular">
+    Abre otra terminal nueva, entra a la carpeta `Frontend/`, instala las dependencias y arranca el servidor de desarrollo:
+
+    ```bash
+    cd Frontend
+    npm install
+    ng serve
+    ```
+
+    Una vez compilado, Angular indicará:
+
+    ```
+    ✔ Compiled successfully.
+    Application bundle generation complete.
+    Local: http://localhost:4200/
+    ```
+
+    La aplicación web estará disponible en `http://localhost:4200`.
+  </Step>
+
+  <Step title="Iniciar sesión en la aplicación">
+    Abre tu navegador en `http://localhost:4200/login` e ingresa con cualquiera de las cuentas de prueba precargadas:
+
+    | Usuario | Contraseña | Rol |
+    |---------|-----------|-----|
+    | `admin` | `admin123` | ADMIN |
+    | `jperez` | `admin123` | VENDEDOR |
+    | `mgarcia` | `admin123` | ALMACENERO |
+
+    <Tip>
+      Todos los usuarios de prueba comparten la misma contraseña inicial: **`admin123`**. Se recomienda cambiarlas antes de desplegar en producción.
+    </Tip>
+
+    Al hacer login el sistema almacenará el token JWT en el almacenamiento local del navegador bajo la clave `tienda_token` y te redirigirá al Dashboard.
+  </Step>
+
+  <Step title="Hacer tu primera llamada a la API con cURL">
+    Puedes verificar que la API funciona correctamente realizando una petición de login directamente desde la terminal. Usa las credenciales del usuario administrador:
+
+    ```bash
+    curl -s -X POST http://localhost:8080/api/auth/login \
+      -H "Content-Type: application/json" \
+      -d '{"username": "admin", "password": "admin123"}' | jq .
+    ```
+
+    La API responderá con un objeto JSON que incluye tu **access token** (válido 24 horas) y el **refresh token** (válido 7 días):
+
+    ```json
+    {
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlcyI6WyJST0xFX0FETUlOIl0...",
+      "refreshToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiJ9...",
+      "username": "admin",
+      "nombre": "Admin",
+      "apellido": "Sistema",
+      "email": "admin@tienda.com",
+      "rol": "ADMIN"
+    }
+    ```
+
+    Copia el valor del campo `token` y úsalo como `Bearer` en el header `Authorization` para llamar a cualquier endpoint protegido:
+
+    ```bash
+    curl -s http://localhost:8080/api/dashboard/stats \
+      -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+    ```
+  </Step>
+</Steps>
+
+## ¿Qué sigue?
+
+Ahora que el sistema está corriendo, te recomendamos:
+
+- Revisar la guía de [Autenticación](/autenticacion) para entender cómo funcionan los tokens JWT y cómo usarlos desde JavaScript o Angular.
+- Explorar los módulos desde el Dashboard en `http://localhost:4200`.
+- Consultar la [documentación completa de la API REST](/api/auth) para ver todos los endpoints disponibles por módulo.
